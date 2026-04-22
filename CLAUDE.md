@@ -1,0 +1,61 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Purpose
+
+This repository is the **context and knowledge base** for a Databricks agent that converts Informatica PowerCenter mappings (XML) into valid Databricks PySpark Notebooks. There is intentionally no runtime code here — only architecture documents, translation references, standards, workflow guides, and prompt templates that the agent consumes.
+
+## Repository Layout
+
+```
+/
+├── CLAUDE.md                          # This file
+├── README.md                          # Project overview and quick-start
+├── AGENT.md                           # Instructions for the Databricks conversion agent
+├── docs/
+│   ├── powercenter_reference.md       # PowerCenter XML schema and component catalog
+│   ├── transformation_mappings.md     # PowerCenter → PySpark/DBX translation table
+│   ├── xml_to_pyspark_examples.md     # Side-by-side XML snippets and their PySpark equivalents
+│   ├── conversion_standards.md        # Coding standards for generated notebooks
+│   └── workflow.md                    # End-to-end conversion workflow
+├── templates/
+│   └── conversion_prompt_template.md  # Fill-in-the-blank prompt for the agent
+└── tests/
+    └── framework.md                   # Testing strategy and pytest setup guide
+```
+
+## Key Concepts
+
+**PowerCenter XML hierarchy:** `POWERMART → REPOSITORY → FOLDER → MAPPING → TRANSFORMATION / CONNECTOR`
+
+**Conversion unit of work:** One PowerCenter `<MAPPING>` produces one Databricks notebook. Mapplets become helper functions or shared notebooks imported via `%run`.
+
+**Authoritative translation reference:** `docs/transformation_mappings.md` is the single source of truth for how each PowerCenter transformation type maps to PySpark. For concrete examples showing the exact XML and the PySpark output side by side, see `docs/xml_to_pyspark_examples.md`. When ambiguous, consult these two files before deciding an approach.
+
+**Standards are non-negotiable:** Generated notebooks must conform to `docs/conversion_standards.md`. Cell structure, import ordering, Delta write patterns, and error handling conventions are all defined there.
+
+## When Working in This Repo
+
+- To add support for a new PowerCenter transformation type, update `docs/transformation_mappings.md` and add a side-by-side example to `docs/xml_to_pyspark_examples.md`.
+- To change how notebooks are structured, update `docs/conversion_standards.md` and cascade any changes to `AGENT.md` and the prompt template.
+- The prompt template in `templates/conversion_prompt_template.md` is what gets sent to the agent at conversion time — keep it synchronized with the docs.
+- `AGENT.md` is read by the conversion agent at the start of every session; it must remain concise and actionable.
+
+## Testing (when code exists)
+
+```bash
+# Install test dependencies
+pip install pytest pytest-cov lxml
+
+# Run all tests
+pytest tests/ -v
+
+# Run a single test file
+pytest tests/test_source_qualifier.py -v
+
+# Run with coverage
+pytest tests/ --cov=src --cov-report=term-missing
+```
+
+Test fixtures live in `tests/fixtures/` (raw XML) and expected outputs in `tests/expected/` (`.py` notebook cells). Tests compare actual agent output against expected files.

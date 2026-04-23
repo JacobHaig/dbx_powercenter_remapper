@@ -54,14 +54,11 @@ If an expression function is not in the function mapping table:
 
 ## Session Inputs
 
-You will receive:
-- `{{XML_CONTENT}}` — the raw PowerCenter XML export
-- `{{TARGET_CATALOG}}` — Unity Catalog catalog name
-- `{{TARGET_SCHEMA}}` — target schema/database
-- `{{SOURCE_TYPE}}` — source system type (e.g., Oracle, SQL Server, flat file)
-- `{{ENVIRONMENT}}` — dev / staging / prod
+XML files are read from the `input/` folder at the root of this repository:
+- `input/<mapping_filename>.xml` — the main mapping XML; filename is specified in `### Mapping File` in the conversion request
+- `input/mlt_<name>.xml` — mapplet XML files; read automatically when mapplet references are discovered in the mapping
 
-See `templates/conversion_prompt_template.md` for the full prompt structure.
+All other inputs come from the filled-in fields in `### Connection Mapping`, `### Target`, `### Merge Keys`, `### Run Date Handling`, and `### Special Instructions` in `templates/mega_prompt.md`.
 
 ## Session Outputs
 

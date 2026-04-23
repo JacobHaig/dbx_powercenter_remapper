@@ -18,35 +18,28 @@ You convert Informatica PowerCenter mapping XML into Databricks PySpark Notebook
 4. Read `docs/conversion_standards.md` to know how to structure the output notebook.
 5. Read `docs/workflow.md` for the end-to-end process you must follow.
 
-## Conversion Rules (Non-Negotiable)
+## Execution Phases
 
-### Parsing
-- Parse the full `<MAPPING>` before writing any output. Understand the complete DAG before translating individual nodes.
-- Walk the `<CONNECTOR>` list to reconstruct the data flow graph. Transformation order in the XML is not reliable; connector topology is.
-- Respect `<TARGETLOADORDER>` when it exists.
+Every conversion follows these four phases in order. Each phase has a required output before the next begins.
 
-### Translation
-- Use `docs/transformation_mappings.md` as the authoritative translation reference. Do not invent patterns.
-- When a transformation has no direct PySpark equivalent, translate to the closest semantic equivalent and add a `# REVIEW:` comment explaining the gap.
-- PowerCenter expression language functions must be translated using the function mapping table in `docs/transformation_mappings.md`. Never leave PowerCenter syntax in the output.
+### Phase 1 — Review & Analysis
+Validate `ISVALID="YES"`. Build the DAG from `<CONNECTOR>` elements. Topological sort. Inventory all transformation types. Flag unsupported types. Score complexity. Output the **Analysis Summary** before proceeding.
 
-### Output Notebook Structure (in cell order)
-1. **Header cell (Markdown):** Mapping name, source system, target system, original mapping description, conversion timestamp, any `# REVIEW:` flags.
-2. **Configuration cell:** Widget definitions (`dbutils.widgets`) for environment-dependent values (catalog, schema, source paths).
-3. **Imports cell:** All `from pyspark.sql import ...` and library imports.
-4. **Source reads:** One cell per source, using the pattern in `docs/conversion_standards.md`.
-5. **Transformation cells:** One cell per logical transformation group, preserving the PowerCenter DAG order.
-6. **Target writes:** One cell per target, using the Delta write pattern in `docs/conversion_standards.md`.
-7. **Validation cell (optional):** Row count assertions if the original mapping had count checks.
+### Phase 2 — Extraction
+Extract everything from the XML: all `<SOURCE>`, `<TARGET>`, and `<TRANSFORMATION>` definitions (every `<TRANSFORMFIELD>` and `<TABLEATTRIBUTE>`), full connector adjacency list, `<TARGETLOADORDER>`, connection variable → Unity Catalog mappings, parameter → widget mappings, all expression strings. Output the **Extraction Complete manifest** before proceeding.
 
-### Quality Gates
-- Every generated notebook must pass these checks before you return it:
-  - [ ] No PowerCenter-specific syntax remains in any cell
-  - [ ] All `<TRANSFORMFIELD>` output ports are accounted for downstream
-  - [ ] All source/target names are parameterized (no hardcoded paths)
-  - [ ] All `UPDATE_STRATEGY` transformations result in a Delta `MERGE` statement
-  - [ ] Lookup transformations use broadcast joins when the lookup source is small (< 1 GB heuristic)
-  - [ ] All `# REVIEW:` comments are listed in the header cell
+### Phase 3 — Notebook Creation
+Write the complete native Databricks notebook using patterns from `docs/transformation_mappings.md` and `docs/conversion_standards.md`.
+
+Required first line: `# Databricks notebook source`
+Cell separator: `# COMMAND ----------`
+
+Cell order: header markdown → widgets → imports → source reads (one per SQ) → transformations (DAG order) → target writes (TARGETLOADORDER sequence) → validation cell (if applicable).
+
+Use `docs/transformation_mappings.md` for every translation decision. Never leave PowerCenter syntax in output. Proceed directly to Phase 4 with no pause.
+
+### Phase 4 — Cell Review
+Walk every cell. For each: check no PowerCenter syntax remains, all ports accounted for, all values from widgets, Update Strategy → MERGE, small Lookups → broadcast, REVIEW comments in header. Correct inline. Output the **Review Summary**, then deliver the notebook and conversion summary.
 
 ## When You Are Uncertain
 
@@ -72,6 +65,9 @@ See `templates/conversion_prompt_template.md` for the full prompt structure.
 
 ## Session Outputs
 
-Return:
-1. The complete notebook as a single Python file (`.py`) with Databricks cell delimiters (`# COMMAND ----------`).
-2. A short conversion summary listing: mapping name, transformation count, any `# REVIEW:` items, and estimated complexity (Low / Medium / High).
+Return in this order:
+1. **Phase 1 — Analysis Summary** (before any code is written)
+2. **Phase 2 — Extraction Complete manifest** (before notebook is written)
+3. **Phase 4 — Review Summary** (after cell review)
+4. **The notebook** — `.py` file, first line `# Databricks notebook source`, cells separated by `# COMMAND ----------`, file name `nb_<mapping_name_lowercase>.py`
+5. **Conversion Summary** — mapping name, source/target counts, transformation count, REVIEW items, complexity score

@@ -10,6 +10,7 @@ Use this template to construct the prompt sent to the Databricks conversion agen
 You are the Databricks conversion agent described in AGENT.md.
 
 Before starting, re-read the following documents:
+- prompt/mega_prompt.md
 - docs/powercenter_reference.md
 - docs/transformation_mappings.md
 - docs/conversion_standards.md

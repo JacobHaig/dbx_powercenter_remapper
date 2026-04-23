@@ -27,7 +27,7 @@ After reading all four files, respond with a brief confirmation before generatin
 
 Complete every field below before submitting this prompt to Genie Code.
 
-> **Agent:** If any field below still contains placeholder text (e.g. `*(e.g., ...)*` or `<!-- PASTE FULL XML HERE -->`), stop and ask the user to complete it before proceeding.
+> **Agent:** If any field below still contains placeholder text (e.g. `*(e.g., ...)*` or `M_EXAMPLE.xml`), stop and ask the user to complete it before proceeding.
 
 ### Connection Mapping
 
@@ -99,13 +99,11 @@ Mark your selection with **[SELECTED]** and leave the others as-is:
 
 *(Anything the agent should know that is not in the XML — known schema differences, edge cases, preserved SQL overrides. Leave blank if none.)*
 
-### Input XML
+### Mapping File
 
-Paste the full PowerCenter XML export below. Do not truncate it.
+Place your PowerCenter XML export in the `input/` folder at the root of this repository, then enter the filename below.
 
-```xml
-<!-- PASTE FULL XML HERE -->
-```
+**Mapping file:** `M_EXAMPLE.xml` ← replace with your filename
 
 ---
 

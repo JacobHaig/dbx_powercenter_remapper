@@ -14,7 +14,7 @@ Given a PowerCenter XML file in the `input/` folder (and a filled-in prompt), th
 2. Parses the `<MAPPING>` XML and reconstructs the data flow graph from `<CONNECTOR>` elements
 3. Translates each `<TRANSFORMATION>` to the equivalent PySpark / Delta Lake pattern
 4. Assembles a single Databricks notebook — one mapping = one notebook, all values parameterized via `dbutils.widgets`
-5. Writes the notebook to `notebooks/nb_<mapping_name>.py` in this repo and returns a conversion summary with any `# REVIEW:` items flagged
+5. Writes the notebook to `notebooks/nb_<mapping_name>` in this repo and returns a conversion summary with any `# REVIEW:` items flagged
 
 ## Quick Navigation
 
@@ -26,6 +26,7 @@ Given a PowerCenter XML file in the `input/` folder (and a filled-in prompt), th
 | [docs/transformation_mappings.md](docs/transformation_mappings.md) | PowerCenter → PySpark authoritative translation table |
 | [docs/xml_to_pyspark_examples.md](docs/xml_to_pyspark_examples.md) | Side-by-side XML snippets and PySpark equivalents |
 | [docs/conversion_standards.md](docs/conversion_standards.md) | Notebook coding standards and cell structure |
+| [docs/databricks_notebook_creation.md](docs/databricks_notebook_creation.md) | SDK pattern for creating notebook assets (not `.py` files) |
 | [docs/workflow.md](docs/workflow.md) | End-to-end conversion workflow |
 | [tests/framework.md](tests/framework.md) | Validation and testing strategy |
 | [templates/conversion_prompt_template.md](templates/conversion_prompt_template.md) | Legacy prompt template (non-Genie Code invocation) |
@@ -50,7 +51,7 @@ Given a PowerCenter XML file in the `input/` folder (and a filled-in prompt), th
 9. Copy the entire completed document
 10. Open Genie Code in a Databricks notebook within this cloned repo
 11. Paste into the Genie Code chat and send
-12. The agent runs 4 phases (Analysis → Extraction → Notebook Creation → Cell Review) and writes the notebook to `notebooks/nb_<mapping_name>.py`
+12. The agent runs 4 phases (Analysis → Extraction → Notebook Creation → Cell Review) and writes the notebook to `notebooks/nb_<mapping_name>`
 13. Review any `# REVIEW:` items flagged in the summary
 14. Pull the latest repo changes via Databricks Repos, then open and run the notebook in dev to validate
 

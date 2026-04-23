@@ -14,10 +14,11 @@ Before writing any output, read each of the following files in full. This reposi
 2. `docs/transformation_mappings.md` — Authoritative PowerCenter → PySpark translation patterns for every transformation type and every expression function
 3. `docs/xml_to_pyspark_examples.md` — Side-by-side XML snippets and their exact PySpark equivalents for every transformation type
 4. `docs/conversion_standards.md` — Required notebook cell structure, naming conventions, Delta write patterns, secrets policy, and pre-delivery checklist
+5. `docs/databricks_notebook_creation.md` — How to create the output notebook as a Databricks workspace asset using the SDK (not a `.py` file write)
 
-After reading all four files, respond with a brief confirmation before generating any notebook code:
+After reading all five files, respond with a brief confirmation before generating any notebook code:
 
-> Files read: powercenter_reference.md ✓, transformation_mappings.md ✓, xml_to_pyspark_examples.md ✓, conversion_standards.md ✓
+> Files read: powercenter_reference.md ✓, transformation_mappings.md ✓, xml_to_pyspark_examples.md ✓, conversion_standards.md ✓, databricks_notebook_creation.md ✓
 
 **Do not write any code until you have read all four files.**
 
@@ -165,9 +166,9 @@ Parameters found:           <$$PARAM> → <widget_name>   [omit line if none]
 
 ## Phase 3: Notebook Creation
 
-Write the complete Databricks native notebook using the extracted data and the patterns from the four reference docs.
+Write the complete Databricks native notebook using the extracted data and the patterns from the reference docs. Create it as a **Databricks workspace notebook asset** using the SDK pattern in `docs/databricks_notebook_creation.md` — do not write a `.py` text file.
 
-**The very first line of the notebook must be:**
+**The very first line of the notebook content must be:**
 ```
 # Databricks notebook source
 ```
@@ -212,8 +213,10 @@ Status:          Ready
 
 **Deliverable 1 — The Notebook**
 
-Complete `.py` file. First line must be `# Databricks notebook source`. Cells separated by `# COMMAND ----------`.
-Write the file to `notebooks/nb_<mapping_name_lowercase>.py` in this repository (replace spaces and special characters with underscores — e.g. `M_Orders_v2 (PROD)` → `notebooks/nb_m_orders_v2_prod.py`).
+A Databricks workspace notebook asset created using the SDK pattern in `docs/databricks_notebook_creation.md`.
+- Content first line: `# Databricks notebook source`
+- Cells separated by: `# COMMAND ----------`
+- Workspace path: `notebooks/nb_<mapping_name_lowercase>` — **no `.py` extension** (replace spaces and special characters with underscores — e.g. `M_Orders_v2 (PROD)` → `notebooks/nb_m_orders_v2_prod`)
 
 **Deliverable 2 — Conversion Summary**
 
@@ -250,6 +253,6 @@ This table is for orientation only. For full translation patterns and code examp
 | Union | `.unionByName()` | One call per additional stream |
 | Sequence Generator | `monotonically_increasing_id()` | Flag as REVIEW — not sequential across runs |
 | Normalizer | `expr("stack(...)")` | One stack entry per repeating group (GCID) |
-| Mapplet | `%run ./mapplets/<name>` | Small/simple → inline function instead |
+| Mapplet | `%run ./mapplets/mlt_<name>` | Small/simple → inline function; large/complex → notebook asset at `notebooks/mapplets/mlt_<name>` |
 | Stored Procedure | `# REVIEW: STORED PROCEDURE` | Flag and stub — requires manual implementation |
 | External Procedure | `# REVIEW: EXTERNAL PROCEDURE` | Flag and stub — requires manual implementation |

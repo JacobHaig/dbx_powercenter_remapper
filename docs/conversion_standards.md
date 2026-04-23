@@ -4,9 +4,11 @@ All notebooks produced by the conversion agent must conform to these standards. 
 
 ---
 
-## Notebook File Format
+## Notebook Format
 
-Notebooks are delivered as `.py` files using Databricks' `# COMMAND ----------` cell delimiter format. This allows source-control-friendly diffs and direct import into Databricks via Repos.
+Notebooks are created as **Databricks workspace notebook assets** using the Databricks SDK — not written as plain `.py` files. See `docs/databricks_notebook_creation.md` for the exact SDK creation pattern and naming convention.
+
+The notebook content uses Databricks source format:
 
 ```
 # Databricks notebook source
@@ -20,6 +22,11 @@ Notebooks are delivered as `.py` files using Databricks' `# COMMAND ----------` 
 
 # COMMAND ----------
 ```
+
+- First line must be exactly `# Databricks notebook source`
+- Cell separator is `# COMMAND ----------`
+- Markdown cell lines are prefixed with `# MAGIC`
+- Notebook path has **no `.py` extension**: `notebooks/nb_<mapping_name_lowercase>`
 
 ---
 

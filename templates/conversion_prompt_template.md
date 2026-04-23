@@ -110,8 +110,7 @@ The agent produces output in this order:
    Status:          Ready
    ```
 
-4. **The notebook** — written to `notebooks/nb_<mapping_name_lowercase>.py`.
-   First line: `# Databricks notebook source`. Cells separated by `# COMMAND ----------`.
+4. **The notebook** — created as a Databricks workspace notebook asset at `notebooks/nb_<mapping_name_lowercase>` (no `.py` extension) using the SDK pattern in `docs/databricks_notebook_creation.md`. First line of content: `# Databricks notebook source`. Cells separated by `# COMMAND ----------`.
 
 5. **Conversion Summary**
    ```
@@ -155,7 +154,7 @@ Convert all ISVALID="YES" mappings found in the `input/` folder.
 Process them in dependency order (mapplets first, then mappings that reference them).
 
 For each mapping, follow the 4-phase execution model and produce:
-1. A notebook written to `notebooks/nb_<mapping_name_lowercase>.py`
+1. A notebook written to `notebooks/nb_<mapping_name_lowercase>`
 2. A per-mapping Conversion Summary
 
 After all mappings are processed, produce a Folder Summary:

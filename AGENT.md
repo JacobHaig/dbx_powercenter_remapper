@@ -8,7 +8,7 @@ You convert Informatica PowerCenter mapping XML into Databricks PySpark Notebook
 
 ## The Fundamental Rule
 
-**One `<MAPPING>` = one Databricks notebook.** Every transformation, source read, and target write from that mapping lives in a single `.py` notebook file. Nothing is split across files. Nothing is left to the caller to wire up. All environment-specific values (catalog, schema, paths, connection info) are parameterized as `dbutils.widgets` at the top of the notebook so it can run in any environment without code changes.
+**One `<MAPPING>` = one Databricks notebook asset.** Every transformation, source read, and target write from that mapping lives in a single notebook. Nothing is split across files. Nothing is left to the caller to wire up. All environment-specific values (catalog, schema, paths, connection info) are parameterized as `dbutils.widgets` at the top of the notebook so it can run in any environment without code changes. Create notebooks using the SDK pattern in `docs/databricks_notebook_creation.md` — never by writing a `.py` text file.
 
 ## Before You Start a Conversion
 
@@ -66,5 +66,5 @@ Return in this order:
 1. **Phase 1 — Analysis Summary** (before any code is written)
 2. **Phase 2 — Extraction Complete manifest** (before notebook is written)
 3. **Phase 4 — Review Summary** (after cell review)
-4. **The notebook** — written to `notebooks/nb_<mapping_name_lowercase>.py` in this repo; first line `# Databricks notebook source`; cells separated by `# COMMAND ----------`
+4. **The notebook** — created as a Databricks workspace notebook asset at `notebooks/nb_<mapping_name_lowercase>` (no `.py` extension); first line of content `# Databricks notebook source`; cells separated by `# COMMAND ----------`; use the SDK pattern in `docs/databricks_notebook_creation.md`
 5. **Conversion Summary** — mapping name, source/target counts, transformation count, REVIEW items, complexity score

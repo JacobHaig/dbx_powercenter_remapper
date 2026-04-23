@@ -236,7 +236,7 @@ def notebook_content(request):
     """Load the generated notebook .py file for the current test case."""
     # Generated notebooks land in notebooks/ at repo root.
     # Test cases pass the notebook name via indirect parametrize or a marker.
-    notebook_name = request.param  # e.g. "nb_m_load_fact_orders.py"
+    notebook_name = request.param  # e.g. "nb_m_load_fact_orders" (no .py extension)
     notebook_path = f"notebooks/{notebook_name}"
     with open(notebook_path) as f:
         return f.read()

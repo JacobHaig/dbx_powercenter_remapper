@@ -20,6 +20,7 @@ This repository is the **context and knowledge base** for a Databricks agent tha
 │   ├── transformation_mappings.md     # PowerCenter → PySpark/DBX translation table
 │   ├── xml_to_pyspark_examples.md     # Side-by-side XML snippets and their PySpark equivalents
 │   ├── conversion_standards.md        # Coding standards for generated notebooks
+│   ├── databricks_notebook_creation.md # SDK pattern for creating notebook assets (not .py files)
 │   └── workflow.md                    # End-to-end conversion workflow
 ├── templates/
 │   └── mega_prompt.md                 # Genie Code entry point — fill in and submit to convert
@@ -40,7 +41,7 @@ This repository is the **context and knowledge base** for a Databricks agent tha
 ## File Locations (Non-Negotiable)
 
 - **Input XML** goes in `input/` before starting a conversion. Files there are gitignored.
-- **All generated notebooks** must be written to `notebooks/` in this repo. File name: `nb_<mapping_name_lowercase>.py`. Do not write notebooks anywhere else.
+- **All generated notebooks** are created as Databricks workspace notebook assets at `notebooks/nb_<mapping_name_lowercase>` — no `.py` extension. Use the SDK pattern in `docs/databricks_notebook_creation.md`. Do not write `.py` text files.
 - All edits to reference docs, standards, and the prompt template happen inside this repo. Do not create files outside it.
 
 ## When Working in This Repo

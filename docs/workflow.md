@@ -133,7 +133,7 @@ Assemble the final notebook in this cell order:
 6. Target write cells (in `TARGETLOADORDER` sequence)
 7. Validation cell (if applicable)
 
-Format as a `.py` file with `# COMMAND ----------` cell delimiters.
+Create as a Databricks workspace notebook asset using the SDK pattern in `docs/databricks_notebook_creation.md`. Content uses `# COMMAND ----------` cell delimiters with `# Databricks notebook source` as the first line.
 
 ---
 
@@ -183,7 +183,7 @@ Complexity scoring:
 
 Once human review is complete:
 
-1. The generated notebook is already in `notebooks/nb_<mapping_name>.py` in this repo. Pull the latest changes via Databricks Repos so the file is visible in your workspace.
+1. The generated notebook asset is already at `notebooks/nb_<mapping_name>` in this repo. Pull the latest changes via Databricks Repos so the file is visible in your workspace.
 2. Open the notebook and run it in interactive mode with `catalog=dev_catalog` to validate end-to-end execution.
 3. Fix any runtime errors (schema mismatches, missing tables, type cast failures).
 4. Parameterize the notebook in a Databricks Job with environment-specific widget values.

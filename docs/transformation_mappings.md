@@ -321,7 +321,7 @@ df_transformed = mlt_address_cleanse(df_source)
 # df_transformed = mlt_address_cleanse(df_source)
 ```
 
-**Large or complex mapplets** (more than ~10 transform fields, or containing Lookups or Aggregators): convert to a standalone notebook at `./mapplets/mlt_<name>.py` and reference with `%run`:
+**Large or complex mapplets** (more than ~10 transform fields, or containing Lookups or Aggregators): create a standalone notebook asset at `notebooks/mapplets/mlt_<name>` using the SDK pattern in `docs/databricks_notebook_creation.md`, then reference it with `%run`:
 
 ```python
 # %run ./mapplets/mlt_address_cleanse

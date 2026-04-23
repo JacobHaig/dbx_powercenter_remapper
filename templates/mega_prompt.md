@@ -95,13 +95,24 @@ Place your PowerCenter XML export in the `input/` folder at the root of this rep
 
 Parse and validate the XML. Build the data flow graph. Assess the mapping before any extraction or code generation begins.
 
-1. Confirm `<MAPPING ISVALID="YES">` — if NO, stop immediately and tell the user: "This mapping is marked ISVALID=NO in PowerCenter. Conversion cannot proceed until the mapping is valid."
-2. Extract `FOLDER NAME` and `MAPPING NAME`
-3. Walk all `<CONNECTOR>` elements and build the full DAG adjacency list (FROMINSTANCE/FROMFIELD → TOINSTANCE/TOFIELD)
-4. Perform a topological sort — confirm no cycles
-5. Inventory every `<TRANSFORMATION>` by type
-6. Flag any transformation types not in `docs/transformation_mappings.md` as unsupported
-7. Score complexity using the first-matching-rule order:
+1. Scan the `input/` folder and list every file found — include the filenames in the Phase 1 output.
+2. Read the mapping file named in `### Mapping File` from `input/`. If the file is not found, stop and tell the user: "Mapping file `<filename>` was not found in `input/`. Place the file there and start a new session."
+3. Confirm `<MAPPING ISVALID="YES">` — if NO, stop immediately and tell the user: "This mapping is marked ISVALID=NO in PowerCenter. Conversion cannot proceed until the mapping is valid."
+4. Extract `FOLDER NAME` and `MAPPING NAME`
+5. Walk all `<CONNECTOR>` elements and build the full DAG adjacency list (FROMINSTANCE/FROMFIELD → TOINSTANCE/TOFIELD)
+6. Perform a topological sort — confirm no cycles
+7. Inventory every `<TRANSFORMATION>` by type. When a `<MAPPLET>` instance reference is found:
+   - Look for a file named `mlt_<name>.xml` in `input/`.
+   - If found: read it, extract input/output ports, convert to a Python helper function per `docs/transformation_mappings.md`, and call it inline in the notebook at the correct DAG position.
+   - If not found: stop and present the user with these options:
+
+     > Mapplet reference found: `<mapplet_name>`. No file named `mlt_<mapplet_name>.xml` was found in `input/`.
+     >
+     > **Option 1** — Paste the mapplet XML into this chat now. I will extract its ports, convert it to a Python helper function, and continue.
+     > **Option 2** — Continue without the mapplet XML. The call will be stubbed as `# REVIEW: MAPPLET — <name> — no XML provided` and added to the REVIEW checklist.
+     > **Option 3** — Stop here. Place `mlt_<mapplet_name>.xml` in the `input/` folder and start a new session.
+8. Flag any transformation types not in `docs/transformation_mappings.md` as unsupported
+9. Score complexity using the first-matching-rule order:
    - **High** — >15 transformations, OR Stored/External Procedures present, OR >2 REVIEW items expected
    - **Medium** — 6–15 transformations, OR has Update Strategy or Lookups, OR ≤2 REVIEW items expected
    - **Low** — all other cases
@@ -110,6 +121,7 @@ Output this summary before proceeding to Phase 2:
 
 ```
 Phase 1 — Analysis Summary
+Input files:     <list of filenames found in input/>
 Mapping:         <name>
 Folder:          <folder>
 Sources:         <n> (<types>)

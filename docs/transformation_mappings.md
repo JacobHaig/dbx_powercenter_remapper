@@ -288,18 +288,47 @@ df_normalized = df.select(
 
 ---
 
-### Mapplet → `%run` or Helper Function
+### Mapplet → Python Helper Function
+
+**When mapplet XML is provided**, extract input and output ports and convert to a Python function:
+
+- `PORTTYPE="INPUT"` ports → the function takes a single DataFrame parameter named `df`; individual input port names are referenced as columns within the function
+- `PORTTYPE="OUTPUT"` ports → columns present on the returned DataFrame
+- `<TRANSFORMFIELD>` expressions inside the mapplet → `.withColumn()` calls inside the function body
 
 ```python
-# In the calling notebook — reference the mapplet notebook
-# %run ./mapplets/mlt_address_cleanse
-
-# Or inline as a function if small enough
+# Mapplet XML had: INPUT ports (zip, state), OUTPUT ports (zip_clean, state_clean)
 def mlt_address_cleanse(df):
-    return df \
-        .withColumn("zip", regexp_replace(col("zip"), "[^0-9]", "")) \
-        .withColumn("state", upper(trim(col("state"))))
+    return (
+        df
+        .withColumn("zip_clean", regexp_replace(col("zip"), "[^0-9]", ""))
+        .withColumn("state_clean", upper(trim(col("state"))))
+        .drop("zip", "state")
+    )
+
+# Call site in the main notebook
+df_transformed = mlt_address_cleanse(df_source)
 ```
+
+**Naming convention:** `mlt_<mapplet_name_lowercase>` for the function; input DataFrame parameter is always `df`.
+
+**When mapplet XML is not provided**, stub and flag:
+
+```python
+# REVIEW: MAPPLET — mlt_address_cleanse — no XML provided
+# Expected input ports: unknown
+# Expected output ports: unknown
+# df_transformed = mlt_address_cleanse(df_source)
+```
+
+**Large or complex mapplets** (more than ~10 transform fields, or containing Lookups or Aggregators): convert to a standalone notebook at `./mapplets/mlt_<name>.py` and reference with `%run`:
+
+```python
+# %run ./mapplets/mlt_address_cleanse
+df_transformed = mlt_address_cleanse(df_source)
+```
+
+Flag as `# REVIEW: MAPPLET INLINED — verify port mappings` whenever inlining a mapplet, since mapplet reuse across notebooks is lost when inlined.
 
 ---
 

@@ -1,6 +1,6 @@
 # Conversion Workflow: PowerCenter → Databricks Notebook
 
-This document describes the end-to-end process for converting a PowerCenter mapping to a Databricks notebook. Follow these steps in order.
+This document describes the end-to-end **human operator** workflow — what you do before, during, and after running the agent. The agent's internal execution model (4 phases: Review & Analysis, Extraction, Notebook Creation, Cell Review) is defined in `AGENT.md` and `templates/mega_prompt.md`. Follow these steps in order.
 
 ---
 
@@ -183,8 +183,8 @@ Complexity scoring:
 
 Once human review is complete:
 
-1. Import the `.py` notebook file into Databricks via Repos (Git-based) or the UI.
-2. Run the notebook in interactive mode with `catalog=dev_catalog` to validate end-to-end execution.
+1. The generated notebook is already in `notebooks/nb_<mapping_name>.py` in this repo. Pull the latest changes via Databricks Repos so the file is visible in your workspace.
+2. Open the notebook and run it in interactive mode with `catalog=dev_catalog` to validate end-to-end execution.
 3. Fix any runtime errors (schema mismatches, missing tables, type cast failures).
 4. Parameterize the notebook in a Databricks Job with environment-specific widget values.
 5. Run a data reconciliation check: compare row counts and key metrics between the PowerCenter output and the Databricks notebook output against the same source data.
@@ -195,10 +195,11 @@ Once human review is complete:
 
 When converting an entire PowerCenter folder (multiple mappings):
 
-1. Convert mappings in dependency order: shared mapplets first, then dependent mappings.
-2. Place all mapplets in a `mapplets/` sub-directory of the Databricks Repo.
-3. Use a shared `config/` notebook for common widget defaults and connection references.
-4. Maintain a `_conversion_log.md` file in the folder tracking conversion status per mapping.
+1. Place all XML files — mappings and mapplets — in the `input/` folder before starting. Use the standard naming conventions (`M_` for mappings, `mlt_` for mapplets).
+2. Convert in dependency order: run mapplet conversions first, then mappings that reference them.
+3. Use the Batch Conversion Template in `templates/conversion_prompt_template.md` for multi-mapping runs.
+4. Use a shared `config/` notebook for common widget defaults and connection references.
+5. Maintain a `_conversion_log.md` file in the `notebooks/` folder tracking conversion status per mapping.
 
 ---
 

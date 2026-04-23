@@ -8,13 +8,13 @@ This is not a runtime application. It is the **architecture, reference, and cont
 
 ## What the Agent Does
 
-Given a PowerCenter export XML file (and a filled-in prompt), the agent:
+Given a PowerCenter XML file in the `input/` folder (and a filled-in prompt), the agent:
 
 1. Reads the reference docs from this repo (`docs/`) for translation patterns and standards
 2. Parses the `<MAPPING>` XML and reconstructs the data flow graph from `<CONNECTOR>` elements
 3. Translates each `<TRANSFORMATION>` to the equivalent PySpark / Delta Lake pattern
 4. Assembles a single Databricks notebook — one mapping = one notebook, all values parameterized via `dbutils.widgets`
-5. Returns the notebook as a `.py` file plus a conversion summary with any `# REVIEW:` items flagged
+5. Writes the notebook to `notebooks/nb_<mapping_name>.py` in this repo and returns a conversion summary with any `# REVIEW:` items flagged
 
 ## Quick Navigation
 
@@ -39,18 +39,20 @@ Given a PowerCenter export XML file (and a filled-in prompt), the agent:
 
 ### Workflow (one mapping at a time)
 
-1. Open `templates/mega_prompt.md` from this repo
-2. Fill in the **Connection Mapping** table — map each `$DBConnection_X` variable from your XML to its Unity Catalog path
-3. Fill in **Target** catalog, schema, and table name(s)
-4. Mark your **Run Date Handling** selection
-5. Add any **Special Instructions** (or leave blank)
-6. Paste the full PowerCenter XML into the XML slot
-7. Copy the entire completed document
-8. Open Genie Code in a Databricks notebook within this cloned repo
-9. Paste into the Genie Code chat and send
-10. Genie Code reads the reference docs and returns a converted `.py` notebook and a conversion summary
-11. Review any `REVIEW:` items flagged in the summary
-12. Import the notebook via Repos or the workspace UI and run it in dev to validate
+1. Place your PowerCenter XML export in the `input/` folder in this repo (e.g. `M_LOAD_FACT_ORDERS.xml`). Place any mapplet XML files there too (`mlt_<name>.xml`).
+2. Open `templates/mega_prompt.md` from this repo
+3. Fill in the **Mapping File** field with your XML filename
+4. Fill in the **Connection Mapping** table — scan the XML for `CONNECTION="..."` attributes and map each one to its Unity Catalog path
+5. Fill in **Target** catalog, schema, and table name(s)
+6. Fill in **Merge Keys** if known (optional)
+7. Mark your **Run Date Handling** selection
+8. Add any **Special Instructions** (or leave blank)
+9. Copy the entire completed document
+10. Open Genie Code in a Databricks notebook within this cloned repo
+11. Paste into the Genie Code chat and send
+12. The agent runs 4 phases (Analysis → Extraction → Notebook Creation → Cell Review) and writes the notebook to `notebooks/nb_<mapping_name>.py`
+13. Review any `# REVIEW:` items flagged in the summary
+14. Pull the latest repo changes via Databricks Repos, then open and run the notebook in dev to validate
 
 ## Supported PowerCenter Transformation Types
 
@@ -87,5 +89,5 @@ Given a PowerCenter export XML file (and a filled-in prompt), the agent:
 To add support for a new transformation type or correct a mapping:
 1. Update `docs/transformation_mappings.md` with the new translation pattern
 2. Add a side-by-side example to `docs/xml_to_pyspark_examples.md`
-3. Update the Zone 2 cheat sheet table in `templates/mega_prompt.md`
+3. Update the Quick Reference table in `templates/mega_prompt.md`
 4. Update `AGENT.md` if the agent's behavior or rules need to change

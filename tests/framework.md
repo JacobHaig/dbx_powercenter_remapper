@@ -17,41 +17,21 @@ There are two distinct validation layers:
 
 ```
 tests/
-├── framework.md             # This file
-├── conftest.py              # pytest fixtures shared across tests
-├── fixtures/                # Sample PowerCenter XML input files
-│   ├── simple_insert/
-│   │   └── mapping.xml
-│   ├── upsert_update_strategy/
-│   │   └── mapping.xml
-│   ├── lookup_connected/
-│   │   └── mapping.xml
-│   ├── lookup_unconnected/
-│   │   └── mapping.xml
-│   ├── aggregator/
-│   │   └── mapping.xml
-│   ├── router/
-│   │   └── mapping.xml
-│   ├── joiner/
-│   │   └── mapping.xml
-│   ├── sequence_generator/
-│   │   └── mapping.xml
-│   ├── normalizer/
-│   │   └── mapping.xml
-│   └── full_mapping/        # Real-world complex mapping fixture
-│       └── mapping.xml
-├── expected/                # Expected notebook output for each fixture
-│   ├── simple_insert/
-│   │   └── nb_expected.py
-│   ├── upsert_update_strategy/
-│   │   └── nb_expected.py
-│   └── ...
-└── static/                  # Static validation tests (no cluster needed)
-    ├── test_structure.py
-    ├── test_no_powercenter_syntax.py
-    ├── test_standards_compliance.py
-    └── test_expression_translation.py
+├── framework.md             # This file — testing strategy and test code templates
+├── conftest.py              # pytest fixtures shared across tests (to be created)
+├── static/                  # Static validation tests — no cluster needed (to be created)
+│   ├── test_structure.py
+│   ├── test_no_powercenter_syntax.py
+│   ├── test_standards_compliance.py
+│   └── test_expression_translation.py
+└── e2e/                     # End-to-end tests — Databricks cluster required (to be created)
+    └── test_e2e_simple_insert.py
+
+input/                       # Sample PowerCenter XML files for test runs — place here, gitignored
+notebooks/                   # Generated notebooks — test output is validated from here
 ```
+
+> **Note:** Only `framework.md` exists today. All other files and directories listed above are the intended structure when tests are implemented.
 
 ---
 
@@ -66,6 +46,11 @@ These tests parse the generated `.py` notebook file and assert structural proper
 ```python
 import pytest
 import re
+
+def test_notebook_source_line(notebook_content):
+    """First line must be the Databricks native notebook marker."""
+    assert notebook_content.startswith("# Databricks notebook source"), \
+        "First line must be '# Databricks notebook source'"
 
 def test_has_header_cell(notebook_content):
     """Header markdown cell must be present."""
@@ -248,10 +233,11 @@ import os
 
 @pytest.fixture
 def notebook_content(request):
-    """Load the notebook .py file for the current test case."""
-    test_dir = os.path.dirname(request.fspath)
-    case_name = os.path.basename(test_dir)
-    notebook_path = f"tests/expected/{case_name}/nb_expected.py"
+    """Load the generated notebook .py file for the current test case."""
+    # Generated notebooks land in notebooks/ at repo root.
+    # Test cases pass the notebook name via indirect parametrize or a marker.
+    notebook_name = request.param  # e.g. "nb_m_load_fact_orders.py"
+    notebook_path = f"notebooks/{notebook_name}"
     with open(notebook_path) as f:
         return f.read()
 

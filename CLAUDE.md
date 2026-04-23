@@ -50,20 +50,6 @@ This repository is the **context and knowledge base** for a Databricks agent tha
 - `templates/mega_prompt.md` is the Genie Code entry point — keep it synchronized with the docs.
 - `AGENT.md` is read by the conversion agent at the start of every session; it must remain concise and actionable.
 
-## Testing (when code exists)
+## Testing
 
-```bash
-# Install test dependencies
-pip install pytest pytest-cov lxml
-
-# Run all tests
-pytest tests/ -v
-
-# Run a single test file
-pytest tests/test_source_qualifier.py -v
-
-# Run with coverage
-pytest tests/ --cov=src --cov-report=term-missing
-```
-
-Test fixtures live in `tests/fixtures/` (raw XML) and expected outputs in `tests/expected/` (`.py` notebook cells). Tests compare actual agent output against expected files.
+No test code exists yet. `tests/framework.md` defines the intended validation strategy: static structure tests (no cluster), expression translation unit tests, and end-to-end functional tests (Databricks cluster required). When tests are implemented they will live in `tests/static/` and `tests/e2e/`.

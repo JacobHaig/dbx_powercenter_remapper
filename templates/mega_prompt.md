@@ -47,23 +47,7 @@ Add or remove rows as needed. Every connection name that appears in the XML must
 
 ### Mapplet XML
 
-If you know this mapping references Mapplets, paste the full exported XML for each one below. Add one labeled block per mapplet. If you are unsure or the mapping has no Mapplets, leave this section blank — the agent will notify you if it finds any.
-
-**Mapplet: `mlt_example`** ← replace with actual mapplet name
-```xml
-<!-- PASTE MAPPLET XML HERE -->
-```
-
-> **Agent:** At the start of Phase 1, scan the main mapping XML for any `<MAPPLET>` instance references. For each one found:
->
-> - If a matching XML block is present in this section: extract input/output ports and convert to a Python helper function using the patterns in `docs/transformation_mappings.md`. Call the function inline in the notebook at the correct DAG position.
-> - If no XML block is provided: stop and present the user with these three options before proceeding:
->
->   > Mapplet reference found: `<mapplet_name>`. No XML was provided in Step 2.
->   >
->   > **Option 1** — Paste the mapplet XML into this chat now. I will extract its ports, convert it to a Python helper function, and continue.
->   > **Option 2** — Continue without the mapplet XML. The call will be stubbed as `# REVIEW: MAPPLET — <name> — no XML provided` and added to the REVIEW checklist.
->   > **Option 3** — Stop here. Add the mapplet XML to the `### Mapplet XML` section in Step 2 and start a new session.
+If this mapping uses Mapplets, place each mapplet XML export in the `input/` folder alongside the mapping file. Use the standard `mlt_` prefix (e.g., `mlt_address_cleanse.xml`). The agent scans `input/` automatically and reads any mapplet files it needs — no changes needed here.
 
 ### Target
 

@@ -69,57 +69,130 @@ Paste the full PowerCenter XML export below. Do not truncate it.
 
 ---
 
-## Step 3: Output
+## Phase 1: Review & Analysis
 
-Return exactly two things — nothing else:
+Parse and validate the XML. Build the data flow graph. Assess the mapping before any extraction or code generation begins.
 
-### 1. The Notebook
+1. Confirm `<MAPPING ISVALID="YES">` — if NO, stop immediately and tell the user: "This mapping is marked ISVALID=NO in PowerCenter. Conversion cannot proceed until the mapping is valid."
+2. Extract `FOLDER NAME` and `MAPPING NAME`
+3. Walk all `<CONNECTOR>` elements and build the full DAG adjacency list (FROMINSTANCE/FROMFIELD → TOINSTANCE/TOFIELD)
+4. Perform a topological sort — confirm no cycles
+5. Inventory every `<TRANSFORMATION>` by type
+6. Flag any transformation types not in `docs/transformation_mappings.md` as unsupported
+7. Score complexity using the first-matching-rule order:
+   - **High** — >15 transformations, OR Stored/External Procedures present, OR >2 REVIEW items expected
+   - **Medium** — 6–15 transformations, OR has Update Strategy or Lookups, OR ≤2 REVIEW items expected
+   - **Low** — all other cases
 
-A complete `.py` file using Databricks `# COMMAND ----------` cell delimiters.
-File name: `nb_<mapping_name_lowercase>.py`
-(Replace spaces and special characters with underscores. Example: `M_Orders_v2 (PROD)` → `nb_m_orders_v2_prod.py`)
-
-Follow the cell order from `docs/conversion_standards.md`:
-1. Markdown header cell (mapping name, source, target, description, REVIEW checklist)
-2. Widget definitions cell
-3. Imports cell
-4. Source read cells (one per Source Qualifier)
-5. Transformation cells (in DAG order)
-6. Target write cells (in TARGETLOADORDER sequence)
-7. Validation cell (if the mapping had count checks)
-
-### 2. Conversion Summary
+Output this summary before proceeding to Phase 2:
 
 ```
-Mapping:          <MAPPING NAME from XML>
-Folder:           <FOLDER NAME from XML>
-Sources:          <count> (<source system types>)
-Targets:          <count> (<target table names>)
+Phase 1 — Analysis Summary
+Mapping:         <name>
+Folder:          <folder>
+Sources:         <n> (<types>)
+Targets:         <n> (<names>)
+Transformations: <total> (<type x count, ...>)
+Unsupported:     <name> (<type>) — will flag as REVIEW   [omit line if none]
+Complexity:      Low / Medium / High
+```
+
+---
+
+## Phase 2: Extraction
+
+Extract every piece of useful information from the XML. Nothing is left unread.
+
+Extract ALL of the following:
+- All `<SOURCE>` definitions — name, database type, every column with datatype, precision, scale, key type
+- All `<TARGET>` definitions — name, table name, every column with datatype, load type (Normal/Bulk), truncate flag
+- All `<TRANSFORMATION>` definitions:
+  - Every `<TRANSFORMFIELD>`: name, PORTTYPE, DATATYPE, EXPRESSION, EXPRESSIONTYPE, precision, scale, GCID (Normalizer), SORTDIRECTION (Sorter)
+  - Every `<TABLEATTRIBUTE>`: name → value (SQL overrides, join conditions, filter conditions, join type, rank direction, cache type, etc.)
+- Full connector adjacency list
+- `<TARGETLOADORDER>` sequence
+- All connection variables (e.g. `$DBConnection_Orders`) — map to the Unity Catalog paths from the Connection Mapping table above
+- All PowerCenter parameters (`$$PARAM_NAME`, mapping variables) — map to widget names
+- All expression strings requiring translation
+
+Output this manifest before proceeding to Phase 3:
+
+```
+Phase 2 — Extraction Complete
+Sources extracted:          <n> (<total columns> columns)
+Targets extracted:          <n> (<total columns> columns)
+Transformations extracted:  <n> (all fields and attributes)
+Connectors mapped:          <n> edges — DAG validated, no cycles
+Connection variables:       <$Var> → <catalog.schema>
+Parameters found:           <$$PARAM> → <widget_name>   [omit line if none]
+```
+
+---
+
+## Phase 3: Notebook Creation
+
+Write the complete Databricks native notebook using the extracted data and the patterns from the four reference docs.
+
+**The very first line of the notebook must be:**
+```
+# Databricks notebook source
+```
+
+**Cell separator:** `# COMMAND ----------`
+
+**Mandatory cell order:**
+1. Markdown header cell — mapping name, source system, target table, original mapping description, REVIEW checklist (one `- [ ]` item per `# REVIEW:` flag that will appear in the notebook body)
+2. Widget definitions cell — one `dbutils.widgets.text(...)` per environment-dependent value; all catalog names, schema names, connection paths, and run_date come from widgets, nothing hardcoded
+3. Imports cell — only functions actually used in this notebook; no speculative imports
+4. Source read cells — one cell per Source Qualifier, variable named `sq_<source_name>`
+5. Transformation cells — one cell per logical transformation group, in topological DAG order, named per `docs/conversion_standards.md`
+6. Target write cells — in `<TARGETLOADORDER>` sequence; Delta MERGE for any target upstream of an Update Strategy, `mode("overwrite")` for truncate-reload, `mode("append")` for insert-only
+7. Validation cell — row count assertions (include only if the mapping contained Aggregator-based count checks or session-level row count validation)
+
+Do not pause or output anything after Phase 3. Proceed directly to Phase 4.
+
+---
+
+## Phase 4: Cell Review
+
+Walk every cell in the drafted notebook against this checklist. Correct any issues found inline. Then deliver.
+
+For each cell, check:
+- [ ] No PowerCenter syntax remains — search for: `IIF(`, `DECODE(`, `:LKP.`, `:SEQ.`, `$$`, `DD_INSERT`, `DD_UPDATE`, `DD_DELETE`, `DD_REJECT`, `SYSDATE`, `ADD_TO_DATE(`, `DATE_DIFF(`
+- [ ] All `<TRANSFORMFIELD>` output ports are accounted for in downstream cells
+- [ ] All catalog names, schema names, table names, and file paths come from `dbutils.widgets.get(...)` — none hardcoded
+- [ ] Every Update Strategy transformation produced a Delta `MERGE` (`.merge(...)`) statement
+- [ ] Lookup transformations use `broadcast()` for sources expected under ~500 MB
+- [ ] Every `# REVIEW:` comment in the body is listed as a checklist item in the header markdown cell
+- [ ] Cell order matches DAG: sources → transformations → targets
+
+Output the review summary, then deliver the notebook and conversion summary:
+
+```
+Phase 4 — Review Summary
+Cells reviewed:  <n>
+Issues found:    <n> (<brief description of each correction>)   [or "none"]
+REVIEW flags:    <n> (<brief description>)                      [or "none"]
+Status:          Ready
+```
+
+**Deliverable 1 — The Notebook**
+
+Complete `.py` file. First line must be `# Databricks notebook source`. Cells separated by `# COMMAND ----------`.
+File name: `nb_<mapping_name_lowercase>.py` (replace spaces and special characters with underscores — e.g. `M_Orders_v2 (PROD)` → `nb_m_orders_v2_prod.py`)
+
+**Deliverable 2 — Conversion Summary**
+
+```
+Mapping:          <MAPPING NAME>
+Folder:           <FOLDER NAME>
+Sources:          <n> (<types>)
+Targets:          <n> (<table names>)
 Transformations:  <total> (<n> translated, <n> flagged for REVIEW)
 Complexity:       Low / Medium / High
 REVIEW Items:
   1. <description> (cell: <cell comment>)
-  2. ...
 ```
-
-Complexity scoring (evaluate in order — first matching rule wins):
-- **High** — >15 transformations, OR Stored/External Procedures present, OR >2 REVIEW items
-- **Medium** — 6–15 transformations, OR has Update Strategy or Lookups, OR ≤2 REVIEW items
-- **Low** — all other cases (≤5 transformations, no Update Strategy, no Lookups, zero REVIEW items)
-
----
-
-## Step 4: Quality Check
-
-Run every item on this checklist against the drafted notebook. If any check fails, revise the notebook to fix it before returning. Do not return output that fails any check.
-
-- [ ] No PowerCenter syntax remains — search for: `IIF(`, `DECODE(`, `:LKP.`, `:SEQ.`, `$$`, `DD_INSERT`, `DD_UPDATE`, `DD_DELETE`, `DD_REJECT`, `SYSDATE`, `ADD_TO_DATE(`, `DATE_DIFF(`
-- [ ] All `<TRANSFORMFIELD>` output ports are accounted for in downstream cells
-- [ ] All source table names, target table names, catalog names, and schema names come from `dbutils.widgets.get(...)` — none are hardcoded string literals
-- [ ] Every Update Strategy transformation produced a Delta `MERGE` (`.merge(...)`) statement
-- [ ] Lookup transformations use `broadcast()` for sources expected to be under ~500 MB
-- [ ] Every `# REVIEW:` comment in the notebook body is listed as a checklist item in the header markdown cell
-- [ ] Cell order matches the data flow DAG: sources → transformations → targets
 
 ---
 

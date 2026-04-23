@@ -13,6 +13,8 @@ This repository is the **context and knowledge base** for a Databricks agent tha
 ├── CLAUDE.md                          # This file
 ├── README.md                          # Project overview and quick-start
 ├── AGENT.md                           # Instructions for the Databricks conversion agent
+├── input/                             # Drop XML files here before conversion (gitignored)
+├── notebooks/                         # All generated notebooks land here
 ├── docs/
 │   ├── powercenter_reference.md       # PowerCenter XML schema and component catalog
 │   ├── transformation_mappings.md     # PowerCenter → PySpark/DBX translation table
@@ -20,7 +22,7 @@ This repository is the **context and knowledge base** for a Databricks agent tha
 │   ├── conversion_standards.md        # Coding standards for generated notebooks
 │   └── workflow.md                    # End-to-end conversion workflow
 ├── templates/
-│   └── conversion_prompt_template.md  # Fill-in-the-blank prompt for the agent
+│   └── mega_prompt.md                 # Genie Code entry point — fill in and submit to convert
 └── tests/
     └── framework.md                   # Testing strategy and pytest setup guide
 ```
@@ -35,11 +37,17 @@ This repository is the **context and knowledge base** for a Databricks agent tha
 
 **Standards are non-negotiable:** Generated notebooks must conform to `docs/conversion_standards.md`. Cell structure, import ordering, Delta write patterns, and error handling conventions are all defined there.
 
+## File Locations (Non-Negotiable)
+
+- **Input XML** goes in `input/` before starting a conversion. Files there are gitignored.
+- **All generated notebooks** must be written to `notebooks/` in this repo. File name: `nb_<mapping_name_lowercase>.py`. Do not write notebooks anywhere else.
+- All edits to reference docs, standards, and the prompt template happen inside this repo. Do not create files outside it.
+
 ## When Working in This Repo
 
 - To add support for a new PowerCenter transformation type, update `docs/transformation_mappings.md` and add a side-by-side example to `docs/xml_to_pyspark_examples.md`.
 - To change how notebooks are structured, update `docs/conversion_standards.md` and cascade any changes to `AGENT.md` and the prompt template.
-- The prompt template in `templates/conversion_prompt_template.md` is what gets sent to the agent at conversion time — keep it synchronized with the docs.
+- `templates/mega_prompt.md` is the Genie Code entry point — keep it synchronized with the docs.
 - `AGENT.md` is read by the conversion agent at the start of every session; it must remain concise and actionable.
 
 ## Testing (when code exists)

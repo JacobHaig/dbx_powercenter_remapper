@@ -66,5 +66,5 @@ Return in this order:
 1. **Phase 1 — Analysis Summary** (before any code is written)
 2. **Phase 2 — Extraction Complete manifest** (before notebook is written)
 3. **Phase 4 — Review Summary** (after cell review)
-4. **The notebook** — `.py` file, first line `# Databricks notebook source`, cells separated by `# COMMAND ----------`, file name `nb_<mapping_name_lowercase>.py`
+4. **The notebook** — written to `notebooks/nb_<mapping_name_lowercase>.py` in this repo; first line `# Databricks notebook source`; cells separated by `# COMMAND ----------`
 5. **Conversion Summary** — mapping name, source/target counts, transformation count, REVIEW items, complexity score

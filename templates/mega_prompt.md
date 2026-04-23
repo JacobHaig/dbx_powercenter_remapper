@@ -213,7 +213,7 @@ Status:          Ready
 **Deliverable 1 — The Notebook**
 
 Complete `.py` file. First line must be `# Databricks notebook source`. Cells separated by `# COMMAND ----------`.
-File name: `nb_<mapping_name_lowercase>.py` (replace spaces and special characters with underscores — e.g. `M_Orders_v2 (PROD)` → `nb_m_orders_v2_prod.py`)
+Write the file to `notebooks/nb_<mapping_name_lowercase>.py` in this repository (replace spaces and special characters with underscores — e.g. `M_Orders_v2 (PROD)` → `notebooks/nb_m_orders_v2_prod.py`).
 
 **Deliverable 2 — Conversion Summary**
 

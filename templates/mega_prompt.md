@@ -31,11 +31,19 @@ Complete every field below before submitting this prompt to Genie Code.
 
 ### Connection Mapping
 
-For each PowerCenter connection variable in the XML, provide the Unity Catalog equivalent. Add or remove rows as needed.
+Before filling in this table, scan the XML for all connection names:
+- `CONNECTION="..."` attributes on every `<SOURCE>` and `<TARGET>` element
+- `$DBConnection_*` variable references inside any `<TABLEATTRIBUTE VALUE="...">` or expression string
 
-| PowerCenter Connection Variable | Unity Catalog Path (`catalog.schema`) |
+List every unique connection name below and map it to its Unity Catalog path.
+
+| PowerCenter Connection Name | Unity Catalog Path (`catalog.schema`) |
 |---|---|
-| `$DBConnection_EXAMPLE` ← replace with actual variable name | `catalog.schema` ← replace with actual path |
+| `PROD_DW_READ` ← replace with actual name | `catalog.schema` ← replace with actual path |
+
+Add or remove rows as needed. Every connection name that appears in the XML must have a row here.
+
+> **Agent:** In Phase 1, confirm that every connection name found in the XML has an entry in this table. List any missing entries in the Analysis Summary as `CONNECTION UNMAPPED — <name>` and stop before Phase 2 until the user resolves them.
 
 ### Target
 

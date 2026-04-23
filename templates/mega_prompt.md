@@ -73,6 +73,18 @@ If you know this mapping references Mapplets, paste the full exported XML for ea
 | Schema | *(e.g., `orders_dw`)* |
 | Table(s) | *(e.g., `fact_orders`)* |
 
+### Merge Keys
+
+If you know the primary key columns for any targets that have an Update Strategy upstream, list them here. Use the exact column names from the PowerCenter target definition. This section is optional — leave it blank if you are unsure.
+
+| Target Table | Merge Key Column(s) |
+|---|---|
+| `fact_orders` ← replace | `ORDER_ID` ← replace; comma-separate multiple keys |
+
+> **Agent:** For each target with an upstream Update Strategy:
+> - If a row is present here: use the specified columns to build the MERGE condition (`tgt.<key> = src.<key>`).
+> - If no row is present: continue, stub the condition as `"tgt.<KEY> = src.<KEY>"`, and add `# REVIEW: MERGE KEY UNKNOWN — <target_name> — specify match columns` to both the notebook cell and the Phase 1 Analysis Summary. Do not stop.
+
 ### Run Date Handling
 
 Mark your selection with **[SELECTED]** and leave the others as-is:

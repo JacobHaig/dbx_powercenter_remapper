@@ -1,2 +1,4 @@
 input/*.xml
+tests/data/*.csv
+tests/data/*.parquet
 /memory

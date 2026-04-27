@@ -14,13 +14,14 @@ Before writing any output, read each of the following files in full. This reposi
 2. `docs/transformation_mappings.md` — Authoritative PowerCenter → PySpark translation patterns for every transformation type and every expression function
 3. `docs/xml_to_pyspark_examples.md` — Side-by-side XML snippets and their exact PySpark equivalents for every transformation type
 4. `docs/conversion_standards.md` — Required notebook cell structure, naming conventions, Delta write patterns, secrets policy, and pre-delivery checklist
-5. `docs/databricks_notebook_creation.md` — How to create the output notebook as a Databricks workspace asset using the SDK (not a `.py` file write)
+5. `docs/databricks_notebook_creation.md` — How to create the output as a Databricks workspace asset using the SDK (covers both regular notebooks and Lakeflow pipeline notebooks)
+6. If `### Output Format` below is marked `pipeline`: also read `docs/lakeflow_pipeline_standards.md` — Lakeflow Spark Declarative Pipeline cell structure, decorator patterns, CDC flow, and pre-delivery checklist
 
-After reading all five files, respond with a brief confirmation before generating any notebook code:
+After reading all required files, respond with a brief confirmation before generating any notebook code:
 
-> Files read: powercenter_reference.md ✓, transformation_mappings.md ✓, xml_to_pyspark_examples.md ✓, conversion_standards.md ✓, databricks_notebook_creation.md ✓
+> Files read: powercenter_reference.md ✓, transformation_mappings.md ✓, xml_to_pyspark_examples.md ✓, conversion_standards.md ✓, databricks_notebook_creation.md ✓ [, lakeflow_pipeline_standards.md ✓ if pipeline format]
 
-**Do not write any code until you have read all four files.**
+**Do not write any code until you have read all required files.**
 
 ---
 
@@ -70,13 +71,24 @@ If you know the primary key columns for any targets that have an Update Strategy
 > - If a row is present here: use the specified columns to build the MERGE condition (`tgt.<key> = src.<key>`).
 > - If no row is present: continue, stub the condition as `"tgt.<KEY> = src.<KEY>"`, and add `# REVIEW: MERGE KEY UNKNOWN — <target_name> — specify match columns` to both the notebook cell and the Phase 1 Analysis Summary. Do not stop.
 
+### Output Format
+
+Mark your selection with **[SELECTED]** and leave the other as-is:
+
+- `notebook` — standard Databricks PySpark notebook using `dbutils.widgets` and explicit Delta writes
+- `pipeline` — Lakeflow Spark Declarative Pipeline (formerly Delta Live Tables) using `@dp.table` decorators and `dp.create_auto_cdc_flow`
+
+> **Agent:** If neither is marked, ask the user before proceeding. The selected format determines which standards doc governs Phase 3:
+> - `notebook` → follow `docs/conversion_standards.md`
+> - `pipeline` → follow `docs/lakeflow_pipeline_standards.md` (and also read it before Phase 3 if you have not already)
+
 ### Run Date Handling
 
 Mark your selection with **[SELECTED]** and leave the others as-is:
 
-- `widget` — create a `run_date` widget, default to today's date
+- `widget` — create a `run_date` widget, default to today's date *(notebook format only — for pipeline use a pipeline parameter)*
 - `full reload` — no date filtering, process full dataset every run
-- `parameter: $$<PARAM_NAME>` — map this PowerCenter parameter to a widget named `run_date`
+- `parameter: $$<PARAM_NAME>` — map this PowerCenter parameter to a widget named `run_date` *(or to `pipeline.param.run_date` if pipeline format)*
 
 > **Agent:** Use only the option marked **[SELECTED]**. If none is marked, ask the user before proceeding.
 
@@ -166,7 +178,7 @@ Parameters found:           <$$PARAM> → <widget_name>   [omit line if none]
 
 ## Phase 3: Notebook Creation
 
-Write the complete Databricks native notebook using the extracted data and the patterns from the reference docs. Create it as a **Databricks workspace notebook asset** using the SDK pattern in `docs/databricks_notebook_creation.md` — do not write a `.py` text file.
+Create the output as a **Databricks workspace notebook asset** using the SDK pattern in `docs/databricks_notebook_creation.md` — never write a `.py` text file. The output format selected in `### Output Format` above determines which standards govern this phase.
 
 **The very first line of the notebook content must be:**
 ```
@@ -175,14 +187,46 @@ Write the complete Databricks native notebook using the extracted data and the p
 
 **Cell separator:** `# COMMAND ----------`
 
+---
+
+### If Output Format = `notebook`
+
+Follow `docs/conversion_standards.md` in full.
+
 **Mandatory cell order:**
-1. Markdown header cell — mapping name, source system, target table, original mapping description, REVIEW checklist (one `- [ ]` item per `# REVIEW:` flag that will appear in the notebook body)
-2. Widget definitions cell — one `dbutils.widgets.text(...)` per environment-dependent value; all catalog names, schema names, connection paths, and run_date come from widgets, nothing hardcoded
-3. Imports cell — only functions actually used in this notebook; no speculative imports
+1. Markdown header cell — mapping name, source system, target table, original mapping description, REVIEW checklist
+2. Widget definitions cell — one `dbutils.widgets.text(...)` per environment-dependent value; nothing hardcoded
+3. Imports cell — only functions actually used; no speculative imports
 4. Source read cells — one cell per Source Qualifier, variable named `sq_<source_name>`
-5. Transformation cells — one cell per logical transformation group, in topological DAG order, named per `docs/conversion_standards.md`
-6. Target write cells — in `<TARGETLOADORDER>` sequence; Delta MERGE for any target upstream of an Update Strategy, `mode("overwrite")` for truncate-reload, `mode("append")` for insert-only
-7. Validation cell — row count assertions (include only if the mapping contained Aggregator-based count checks or session-level row count validation)
+5. Transformation cells — one cell per logical transformation group, in topological DAG order
+6. Target write cells — in `<TARGETLOADORDER>` sequence; Delta MERGE for Update Strategy targets, `mode("overwrite")` for truncate-reload, `mode("append")` for insert-only
+7. Validation cell — row count assertions (include only if the mapping contained count checks)
+
+---
+
+### If Output Format = `pipeline`
+
+Read `docs/lakeflow_pipeline_standards.md` before writing any code. Follow it in full.
+
+**Key differences from a regular notebook:**
+- Import: `from pyspark import pipelines as dp`
+- No `dbutils.widgets` — use `spark.conf.get("pipeline.param.<name>")` for environment values
+- Every dataset (source, intermediate, target) is a `@dp.table` or `@dp.materialized_view` decorated function
+- Intermediate datasets that should not persist as Delta tables use `@dp.temporary_view`
+- Update Strategy targets use `dp.create_auto_cdc_flow(...)` instead of `DeltaTable.merge(...)`
+- No explicit `.write` calls — pipeline runtime handles persistence
+
+**Mandatory cell order:**
+1. Markdown header cell — same as notebook, plus a note that this is a pipeline notebook
+2. Imports cell — `from pyspark import pipelines as dp` plus all needed Spark functions
+3. Pipeline parameters cell — `spark.conf.get("pipeline.param.*")` reads plus a `# REVIEW:` listing every parameter the pipeline configuration must declare
+4. Source dataset cells — one `@dp.table` function per Source Qualifier
+5. Transformation dataset cells — one `@dp.table` / `@dp.temporary_view` / `@dp.materialized_view` per logical group, in DAG order
+6. Target dataset cells — one `@dp.table` or `dp.create_auto_cdc_flow` per target, in `<TARGETLOADORDER>` sequence
+
+The notebook path follows the same naming convention: `notebooks/nb_<mapping_name_lowercase>` — no `.py` extension.
+
+---
 
 Do not pause or output anything after Phase 3. Proceed directly to Phase 4.
 

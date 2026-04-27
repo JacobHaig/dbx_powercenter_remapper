@@ -139,6 +139,49 @@ print(f"Notebook created: {target_path}")
 
 ---
 
+## Lakeflow Spark Declarative Pipeline Notebooks
+
+When the output format is `pipeline`, the notebook itself is still created as a workspace notebook asset using the same SDK pattern above — the content just uses `@dp.table` decorators instead of imperative PySpark. The `language=Language.PYTHON` and `format=ImportFormat.SOURCE` parameters are unchanged.
+
+After creating the notebook asset, the user must also create a **pipeline** that runs it. Provide this creation snippet as a separate deliverable cell:
+
+```python
+from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.pipelines import (
+    PipelineLibrary, NotebookLibrary, PipelineCluster
+)
+
+w = WorkspaceClient()
+
+pipeline = w.pipelines.create(
+    name="pipeline_<mapping_name_lowercase>",
+    libraries=[
+        PipelineLibrary(
+            notebook=NotebookLibrary(
+                path=f"{repo_root}/notebooks/nb_<mapping_name_lowercase>"
+            )
+        )
+    ],
+    continuous=False,      # triggered (batch) mode — set True for streaming
+    channel="CURRENT",     # use latest Databricks runtime
+    configuration={
+        # Declare all pipeline.param.* values referenced in the notebook
+        "pipeline.param.catalog": "<catalog>",
+        "pipeline.param.schema":  "<schema>",
+        # Add additional parameters here
+    }
+)
+
+print(f"Pipeline created: {pipeline.pipeline_id}")
+```
+
+Key points:
+- `continuous=False` matches the PowerCenter batch ETL model; change to `True` only for streaming sources.
+- Every `spark.conf.get("pipeline.param.*")` call in the notebook must have a corresponding entry in `configuration`.
+- The pipeline SDK call is a **separate deliverable** from the notebook asset — deliver both.
+
+---
+
 ## Mapplet Notebooks
 
 When a Mapplet is large or complex enough to warrant its own notebook (see `docs/transformation_mappings.md`), create it at:

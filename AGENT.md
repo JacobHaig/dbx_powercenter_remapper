@@ -15,8 +15,9 @@ You convert Informatica PowerCenter mapping XML into Databricks PySpark Notebook
 1. Read `docs/powercenter_reference.md` to understand the XML schema you are parsing.
 2. Read `docs/transformation_mappings.md` to know how to translate each transformation type.
 3. Read `docs/xml_to_pyspark_examples.md` for concrete side-by-side XML → PySpark examples.
-4. Read `docs/conversion_standards.md` to know how to structure the output notebook.
+4. Read `docs/conversion_standards.md` to know how to structure a regular notebook output.
 5. Read `docs/workflow.md` for the end-to-end process you must follow.
+6. Check the `### Output Format` field in the conversion request. If it is `pipeline`, also read `docs/lakeflow_pipeline_standards.md` before Phase 3.
 
 ## Execution Phases
 
@@ -29,12 +30,20 @@ Validate `ISVALID="YES"`. Build the DAG from `<CONNECTOR>` elements. Topological
 Extract everything from the XML: all `<SOURCE>`, `<TARGET>`, and `<TRANSFORMATION>` definitions (every `<TRANSFORMFIELD>` and `<TABLEATTRIBUTE>`), full connector adjacency list, `<TARGETLOADORDER>`, connection variable → Unity Catalog mappings, parameter → widget mappings, all expression strings. Output the **Extraction Complete manifest** before proceeding.
 
 ### Phase 3 — Notebook Creation
-Write the complete native Databricks notebook using patterns from `docs/transformation_mappings.md` and `docs/conversion_standards.md`.
 
-Required first line: `# Databricks notebook source`
+Check the `### Output Format` field in the conversion request **before writing any code.**
+
+- If `notebook` (or no selection): follow `docs/conversion_standards.md`. See below.
+- If `pipeline`: read `docs/lakeflow_pipeline_standards.md` in full, then follow it instead.
+- If neither is selected: stop and ask the user to mark a selection before proceeding.
+
+Required first line of content: `# Databricks notebook source`
 Cell separator: `# COMMAND ----------`
+Create as a workspace notebook asset using `docs/databricks_notebook_creation.md` — never a `.py` file.
 
-Cell order: header markdown → widgets → imports → source reads (one per SQ) → transformations (DAG order) → target writes (TARGETLOADORDER sequence) → validation cell (if applicable).
+**notebook format cell order:** header markdown → widgets → imports → source reads (one per SQ) → transformations (DAG order) → target writes (TARGETLOADORDER sequence) → validation cell (if applicable).
+
+**pipeline format cell order:** header markdown → imports (include `from pyspark import pipelines as dp`) → pipeline parameters → source `@dp.table` functions (one per SQ) → transformation `@dp.table` / `@dp.temporary_view` / `@dp.materialized_view` functions (DAG order) → target `@dp.table` or `dp.create_auto_cdc_flow` (TARGETLOADORDER sequence).
 
 Use `docs/transformation_mappings.md` for every translation decision. Never leave PowerCenter syntax in output. Proceed directly to Phase 4 with no pause.
 

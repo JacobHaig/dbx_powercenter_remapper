@@ -92,13 +92,47 @@ schema  = spark.conf.get("pipeline.param.schema")
 
 These module-level variables are available inside every `@dp.table` function closure because module code runs at notebook import time.
 
-### Cells 4–N — Source Datasets
+### Code Formatting (Pipeline)
+
+Follow the same formatting rules as regular notebooks (`docs/conversion_standards.md` — Code Formatting section), with these pipeline-specific additions:
+
+**Cell header comment** — first line of every cell must identify the source transformation:
+
+```python
+# SQ_ORDERS  [Source Qualifier]
+# EXP_CALCULATE_AMOUNTS  [Expression]
+# AGG_DAILY_TOTALS  [Aggregator]
+# TGT_FACT_ORDERS  [Target Definition]
+```
+
+**Function body formatting** — one `.method()` per line inside the return expression, indented 4 spaces from the opening parenthesis:
+
+```python
+# EXP_CALCULATE_AMOUNTS  [Expression]
+@dp.table(name="df_amounts")
+def df_amounts():
+    orders = dp.read("sq_orders")
+    return (
+        orders
+        .withColumn("tax_amount",     round(col("subtotal") * lit(0.08), 2))
+        .withColumn("total_amount",   col("subtotal") + col("tax_amount"))
+        .withColumn("is_large_order", when(col("total_amount") > 1000, lit(1)).otherwise(lit(0)))
+    )
+```
+
+Do **not** chain methods on a single line or use backslash continuation inside function bodies.
+
+---
+
+### Cells 4 through N — Source Datasets
 
 One cell per Source Qualifier. Each is a `@dp.table` decorated function.
 
+> **Reading datasets downstream:** Use `dp.read("name")` where `"name"` matches the `name=` argument of the upstream `@dp.table` / `@dp.temporary_view` / `@dp.materialized_view` decorator exactly.
+
 **No SQL override — read full table:**
 ```python
-# SQ_ORDERS
+# SQ_ORDERS  [Source Qualifier]
 @dp.table(name="sq_orders")
 def sq_orders():
     return spark.table(f"{catalog}.{schema}.orders")
@@ -106,7 +140,7 @@ def sq_orders():
 
 **With Source Filter (`Source Filter` attribute on SQ):**
 ```python
-# SQ_ORDERS — Source Filter: status IN ('ACTIVE','PENDING')
+# SQ_ORDERS  [Source Qualifier] — Source Filter: status IN ('ACTIVE','PENDING')
 @dp.table(name="sq_orders")
 def sq_orders():
     return (
@@ -117,7 +151,7 @@ def sq_orders():
 
 **With SQL override (`Sql Query` attribute on SQ):**
 ```python
-# SQ_ORDERS — Sql Query override
+# SQ_ORDERS  [Source Qualifier] — Sql Query override
 @dp.table(name="sq_orders")
 def sq_orders():
     return spark.sql(f"""
@@ -129,7 +163,7 @@ def sq_orders():
 
 **With User Defined Join (multiple sources joined inside SQ):**
 ```python
-# SQ_ORDERS_CUSTOMERS — User Defined Join
+# SQ_ORDERS_CUSTOMERS  [Source Qualifier] — User Defined Join
 @dp.table(name="sq_orders_customers")
 def sq_orders_customers():
     return spark.sql(f"""
@@ -141,31 +175,31 @@ def sq_orders_customers():
 
 ### Cells N+1 through M — Transformation Datasets
 
-One cell per logical transformation group, in topological DAG order. Each function reads upstream datasets with `dp.read("name")`.
+One cell per logical transformation group, in topological DAG order. Each function reads upstream datasets with `dp.read("name")` — the string must match the `name=` argument of the upstream decorator exactly.
 
 **Expression — `.withColumn()` chain:**
 ```python
-# EXP_CALCULATE_AMOUNTS
+# EXP_CALCULATE_AMOUNTS  [Expression]
 @dp.table(name="df_amounts")
 def df_amounts():
     orders = dp.read("sq_orders")
     return (
         orders
-        .withColumn("tax_amount", round(col("subtotal") * lit(0.08), 2))
-        .withColumn("total_amount", col("subtotal") + col("tax_amount"))
+        .withColumn("tax_amount",     round(col("subtotal") * lit(0.08), 2))
+        .withColumn("total_amount",   col("subtotal") + col("tax_amount"))
         .withColumn("is_large_order", when(col("total_amount") > 1000, lit(1)).otherwise(lit(0)))
     )
 ```
 
 **VARIABLE ports** — prefix `_v_`, drop after use (same rule as regular notebooks):
 ```python
-# EXP_WITH_VARIABLE_PORT
+# EXP_WITH_VARIABLE_PORT  [Expression]
 @dp.table(name="df_with_rate")
 def df_with_rate():
     return (
         dp.read("sq_orders")
         .withColumn("_v_tax_rate", lit(0.08))
-        .withColumn("tax_amount", col("amount") * col("_v_tax_rate"))
+        .withColumn("tax_amount",  col("amount") * col("_v_tax_rate"))
         .drop("_v_tax_rate")    # VARIABLE port — drop before passing downstream
     )
 ```
@@ -173,21 +207,28 @@ def df_with_rate():
 Use `@dp.temporary_view` for intermediate datasets that should not be persisted as Delta tables (e.g., internal filter branches):
 
 ```python
+# FIL_ACTIVE_ORDERS  [Filter]
 @dp.temporary_view(name="vw_filtered")
 def vw_filtered():
-    return dp.read("df_amounts").filter(col("total_amount") > 0)
+    return (
+        dp.read("df_amounts")
+        .filter(col("total_amount") > 0)
+    )
 ```
 
 Use `@dp.materialized_view` for aggregations (Aggregator transformation) — fully refreshes on every pipeline run, which matches PowerCenter batch semantics:
 
 ```python
-# AGG_DAILY_TOTALS
+# AGG_DAILY_TOTALS  [Aggregator]
 @dp.materialized_view(name="mv_daily_totals")
 def mv_daily_totals():
     return (
         dp.read("df_amounts")
         .groupBy("order_date")
-        .agg(sum("total_amount").alias("daily_total"), count("order_id").alias("order_count"))
+        .agg(
+            sum("total_amount").alias("daily_total"),
+            count("order_id").alias("order_count"),
+        )
     )
 ```
 
@@ -197,7 +238,7 @@ One cell per target, in `<TARGETLOADORDER>` sequence.
 
 **Append-only target (no Update Strategy upstream):**
 ```python
-# TGT_FACT_ORDERS — append
+# TGT_FACT_ORDERS  [Target Definition] — append
 @dp.table(name="fact_orders", table_properties={"quality": "gold"})
 def fact_orders():
     return dp.read("df_amounts")
@@ -207,7 +248,7 @@ def fact_orders():
 
 Use `@dp.materialized_view`, which fully recomputes and replaces the dataset on every pipeline run — equivalent to `mode("overwrite")` in a regular notebook:
 ```python
-# TGT_DIM_PRODUCT — truncate-reload
+# TGT_DIM_PRODUCT  [Target Definition] — truncate-reload
 @dp.materialized_view(name="dim_product")
 def dim_product():
     return dp.read("df_product_transformed")
@@ -215,28 +256,27 @@ def dim_product():
 
 **CDC / Update Strategy target:**
 
-When the PowerCenter mapping contains an Update Strategy transformation, use `dp.create_auto_cdc_flow`. The `source` DataFrame must have DD_REJECT rows (flag value 3) filtered out upstream before this call.
+When the PowerCenter mapping contains an Update Strategy transformation, use `dp.create_auto_cdc_flow`. Filter out DD_REJECT rows in a `@dp.temporary_view` immediately before this call, then pass that view as `source`.
 
 ```python
-# TGT_FACT_ORDERS — CDC via Update Strategy
-# DD_REJECT rows (dd_flag == 3) must be filtered from df_amounts before reaching here.
-dp.create_auto_cdc_flow(
-    name="fact_orders",
-    source="df_amounts_no_reject",  # upstream dataset with DD_REJECT already removed
-    keys=["order_id"],              # merge key columns from ### Merge Keys in the prompt
-    sequence_by=col("run_date"),    # REVIEW: choose a monotonically increasing column
-                                    # (timestamp, batch sequence, etc.) — no equivalent in PC
-    apply_as_deletes=col("dd_flag") == 2,   # DD_DELETE = 2
-    stored_as_scd_type=1            # REVIEW: confirm SCD type (1 = overwrite, 2 = history rows)
-)
-```
-
-**Filtering DD_REJECT before CDC** — add a `@dp.temporary_view` immediately before the CDC call:
-```python
-# Filter out DD_REJECT rows before CDC flow
+# UPD_ORDERS → TGT_FACT_ORDERS  [Update Strategy + Target Definition]
+# Step 1: filter DD_REJECT rows (dd_flag == 3) before the CDC flow
 @dp.temporary_view(name="df_amounts_no_reject")
 def df_amounts_no_reject():
-    return dp.read("df_amounts").filter(col("dd_flag") != 3)
+    return (
+        dp.read("df_amounts")
+        .filter(col("dd_flag") != 3)
+    )
+
+# Step 2: CDC flow — source must already have DD_REJECT removed
+dp.create_auto_cdc_flow(
+    name="fact_orders",
+    source="df_amounts_no_reject",   # upstream @dp.temporary_view name
+    keys=["order_id"],               # merge key columns — from ### Merge Keys in the prompt
+    sequence_by=col("run_date"),     # REVIEW: choose a monotonically increasing column
+    apply_as_deletes=col("dd_flag") == 2,  # DD_DELETE = 2
+    stored_as_scd_type=1,            # REVIEW: confirm SCD type (1=overwrite, 2=history rows)
+)
 ```
 
 If merge keys are unknown, stub as:
@@ -245,9 +285,9 @@ If merge keys are unknown, stub as:
 dp.create_auto_cdc_flow(
     name="fact_orders",
     source="df_amounts_no_reject",
-    keys=["<KEY>"],                 # REVIEW: replace with actual key columns
-    sequence_by=col("run_date"),    # REVIEW: replace with appropriate sequence column
-    stored_as_scd_type=1
+    keys=["<KEY>"],                  # REVIEW: replace with actual key columns
+    sequence_by=col("run_date"),     # REVIEW: replace with appropriate sequence column
+    stored_as_scd_type=1,
 )
 ```
 

@@ -134,7 +134,7 @@ Key `<TABLEATTRIBUTE>` values:
 | `Sorted Input` | `true` if inputs are pre-sorted |
 | `Case Sensitive String Comparison` | `true` / `false` |
 
-Input ports tagged with `INPUT` and prefixed `MASTER:` / `DETAIL:` identify which pipeline is which.
+Which input pipeline is master vs. detail is identified by the `TOFIELD` attribute on the `<CONNECTOR>` elements — the master side has a `MASTER:` prefix on `TOFIELD` (e.g., `TOFIELD="MASTER:customer_id"`). The detail side has no prefix.
 
 ### Lookup (`Lookup Procedure`)
 
@@ -167,7 +167,7 @@ Key `<TABLEATTRIBUTE>` values:
 
 ### Router (`Router`)
 
-Splits one input stream into multiple output groups based on filter conditions. Each group is a `<TRANSFORMFIELD>` with a `GROUP FILTER CONDITION` expression. The default group captures unmatched rows.
+Splits one input stream into multiple output groups based on filter conditions. Each named group is defined by a pair of `<TABLEATTRIBUTE>` elements — one with `NAME="GROUP NAME"` and one with `NAME="GROUP FILTER CONDITION"`. Input and output ports are defined via `<TRANSFORMFIELD>` elements as usual. The default group has no condition; it captures all rows unmatched by any named group.
 
 ### Sorter (`Sorter`)
 
@@ -315,11 +315,14 @@ VARIANCE(port)
 ```
 
 ### Special
+
+> These are **PowerCenter expression syntax** constructs — they appear inside `EXPRESSION` attribute values on `<TRANSFORMFIELD>` elements and are **not** Python or SQL. Translate each one as described in `docs/transformation_mappings.md`.
+
 ```
-:LKP.<lookup_name>(key_port)   -- unconnected lookup call
-:SEQ.<seq_name>.NEXTVAL        -- sequence next value
+:LKP.<lookup_name>(key_port)   -- unconnected lookup call — translate to a pre-joined broadcast column
+:SEQ.<seq_name>.NEXTVAL        -- sequence next value — translate to monotonically_increasing_id()
 NULL                           -- null literal
-ISNULL(port)                   -- null check
+ISNULL(port)                   -- null check — translate to col("port").isNull()
 ```
 
 ---

@@ -45,6 +45,15 @@ Create as a workspace notebook asset using `docs/databricks_notebook_creation.md
 
 **pipeline format cell order:** header markdown → imports (include `from pyspark import pipelines as dp`) → pipeline parameters → source `@dp.table` functions (one per SQ) → transformation `@dp.table` / `@dp.temporary_view` / `@dp.materialized_view` functions (DAG order) → target `@dp.table` or `dp.create_auto_cdc_flow` (TARGETLOADORDER sequence).
 
+**Formatting requirements (non-negotiable):**
+1. **Cell header comment** — the first line of every code cell must be: `# <TRANSFORMATION_NAME>  [<TYPE>]` using the exact `NAME` and `TYPE` from the source XML. This is the cell's link back to the original PowerCenter transformation.
+2. **One method per line** — never chain `.withColumn()`, `.filter()`, `.join()`, `.agg()` calls on a single line. Use parentheses (not backslash) for line continuation.
+3. **One column per `.withColumn()` call** — do not combine multiple assignments on one line.
+4. **MERGE clauses** — each `.whenMatched...()` / `.whenNotMatched...()` on its own line; `set` / `values` dictionaries broken out one key per line.
+5. **Aggregations** — each `.alias()` expression on its own line inside `.agg(...)`.
+
+See `docs/conversion_standards.md` — Code Formatting section for canonical examples of each pattern.
+
 Use `docs/transformation_mappings.md` for every translation decision. Never leave PowerCenter syntax in output. Proceed directly to Phase 4 with no pause.
 
 ### Phase 4 — Cell Review

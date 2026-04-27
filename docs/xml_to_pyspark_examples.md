@@ -20,7 +20,7 @@ Each section shows the raw PowerCenter XML for one transformation type and the e
 
 **PySpark**
 ```python
-# SQ_ORDERS
+# SQ_ORDERS  [Source Qualifier]
 sq_orders = spark.table(f"{catalog}.{schema}.orders")
 ```
 
@@ -40,10 +40,10 @@ sq_orders = spark.table(f"{catalog}.{schema}.orders")
 
 **PySpark**
 ```python
-# SQ_ORDERS
-sq_orders = spark.sql("""
+# SQ_ORDERS  [Source Qualifier] — Sql Query override
+sq_orders = spark.sql(f"""
     SELECT order_id, amount
-    FROM orders
+    FROM {catalog}.{schema}.orders
     WHERE region = 'US'
 """)
 ```
@@ -53,6 +53,9 @@ sq_orders = spark.sql("""
 ## Expression
 
 **PowerCenter XML**
+
+> **Port types:** `INPUT/OUTPUT` passes through unchanged. `OUTPUT` is a computed column. `VARIABLE` (`PORTTYPE="VARIABLE"`) is an internal intermediate — it is computed but **never passed downstream**; translate with a `_v_` prefix and `.drop()` it before returning.
+
 ```xml
 <TRANSFORMATION NAME="EXP_CALC" TYPE="Expression">
   <TRANSFORMFIELD NAME="order_id"    PORTTYPE="INPUT/OUTPUT" EXPRESSION="order_id"               DATATYPE="number"   PRECISION="10" SCALE="0"/>
@@ -64,16 +67,20 @@ sq_orders = spark.sql("""
 </TRANSFORMATION>
 ```
 
+> **Expression syntax:** `ROUND`, `UPPER`, `TRIM`, `IIF` are PowerCenter built-in functions. See `docs/transformation_mappings.md` — Expression Function Translation Table for the PySpark equivalents.
+
 **PySpark**
 ```python
-# EXP_CALC
-# _v_discount is a VARIABLE port — compute inline, do not pass downstream
-df_calc = sq_orders \
-    .withColumn("tax_amount", round(col("amount") * lit(0.08), 2)) \
-    .withColumn("full_name", upper(trim(concat_ws(" ", col("first_name"), col("last_name"))))) \
-    .withColumn("_v_discount", when(col("amount") > 1000, lit(0.10)).otherwise(lit(0.05))) \
-    .withColumn("net_amount", col("amount") - (col("amount") * col("_v_discount"))) \
+# EXP_CALC  [Expression]
+# _v_discount has PORTTYPE="VARIABLE" — compute inline, drop before passing downstream
+df_calc = (
+    sq_orders
+    .withColumn("tax_amount",   round(col("amount") * lit(0.08), 2))
+    .withColumn("full_name",    upper(trim(concat_ws(" ", col("first_name"), col("last_name")))))
+    .withColumn("_v_discount",  when(col("amount") > 1000, lit(0.10)).otherwise(lit(0.05)))
+    .withColumn("net_amount",   col("amount") - (col("amount") * col("_v_discount")))
     .drop("_v_discount")
+)
 ```
 
 ---
@@ -92,9 +99,10 @@ df_calc = sq_orders \
 
 **PySpark**
 ```python
-# FIL_ACTIVE_ORDERS
-df_filtered = df_calc.filter(
-    (col("status") == "ACTIVE") & (col("amount") > 0)
+# FIL_ACTIVE_ORDERS  [Filter]
+df_filtered = (
+    df_calc
+    .filter((col("status") == "ACTIVE") & (col("amount") > 0))
 )
 ```
 
@@ -121,24 +129,27 @@ df_filtered = df_calc.filter(
   <TABLEATTRIBUTE NAME="Sorted Input"   VALUE="false"/>
 </TRANSFORMATION>
 
-<!-- Connectors identifying which pipeline is master vs. detail -->
+<!-- CONNECTOR elements declare which upstream pipeline is master vs. detail.
+     The MASTER: prefix on TOFIELD marks the master (right/lookup) side. -->
 <CONNECTOR FROMINSTANCE="SQ_ORDERS"    FROMFIELD="order_id"    TOINSTANCE="JNR_ORDER_CUSTOMER" TOFIELD="order_id"/>
-<CONNECTOR FROMINSTANCE="SQ_CUSTOMERS" FROMFIELD="customer_id" TOINSTANCE="JNR_ORDER_CUSTOMER" TOFIELD="customer_id"   <!-- MASTER -->/>
+<CONNECTOR FROMINSTANCE="SQ_CUSTOMERS" FROMFIELD="customer_id" TOINSTANCE="JNR_ORDER_CUSTOMER" TOFIELD="MASTER:customer_id"/>
 ```
 
 **PySpark**
 ```python
-# JNR_ORDER_CUSTOMER — Normal (inner) join
-# Master pipeline = sq_customers (right side)
-# Detail pipeline = df_filtered  (left/driving side)
-df_joined = df_filtered.join(
-    sq_customers,
-    df_filtered["customer_id"] == sq_customers["customer_id"],
-    "inner"
-).select(
-    df_filtered["order_id"],
-    sq_customers["customer_name"],
-    df_filtered["amount"],
+# JNR_ORDER_CUSTOMER  [Joiner] — Normal (inner) join
+# Master pipeline = sq_customers (right side); Detail pipeline = df_filtered (left/driving side)
+df_joined = (
+    df_filtered.join(
+        sq_customers,
+        df_filtered["customer_id"] == sq_customers["customer_id"],
+        "inner",
+    )
+    .select(
+        df_filtered["order_id"],
+        sq_customers["customer_name"],
+        df_filtered["amount"],
+    )
 )
 ```
 
@@ -171,16 +182,20 @@ df_joined = df_filtered.join(
 
 **PySpark**
 ```python
-# LKP_PRODUCT — broadcast join (caching enabled → small table assumption)
-# "Use first value" policy → deduplicate lookup on join key before joining
-lkp_product = spark.table(f"{catalog}.{schema}.dim_product") \
-    .dropDuplicates(["product_id"]) \
+# LKP_PRODUCT  [Lookup Procedure] — broadcast join (caching enabled → small table assumption)
+# "Use first value" policy → deduplicate on join key before joining
+lkp_product = (
+    spark.table(f"{catalog}.{schema}.dim_product")
+    .dropDuplicates(["product_id"])
     .select("product_id", "product_name", "category")
+)
 
-df_with_product = df_joined.join(
-    broadcast(lkp_product),
-    "product_id",
-    "left"
+df_with_product = (
+    df_joined.join(
+        broadcast(lkp_product),
+        "product_id",
+        "left",
+    )
 )
 ```
 
@@ -188,35 +203,43 @@ df_with_product = df_joined.join(
 
 ## Lookup (Unconnected)
 
-Unconnected lookups appear as `:LKP.<name>(key)` inside an Expression port. They are pre-joined before the expression step.
+Unconnected lookups appear as `:LKP.<name>(key)` inside an Expression port `EXPRESSION` attribute. This is **PowerCenter expression syntax** (not Python) — the colon-prefix `:LKP.` signals an unconnected lookup call. Translate by pre-joining the lookup table before the Expression cell so the result column is available as a regular DataFrame column.
 
 **PowerCenter XML**
 ```xml
-<!-- Lookup definition -->
+<!-- Lookup definition — note TYPE="Lookup Procedure" for both connected and unconnected -->
 <TRANSFORMATION NAME="LKP_TAX_RATE" TYPE="Lookup Procedure">
   <TRANSFORMFIELD NAME="state_code" PORTTYPE="INPUT"  DATATYPE="varchar2" PRECISION="2"  SCALE="0"/>
   <TRANSFORMFIELD NAME="tax_rate"   PORTTYPE="OUTPUT" DATATYPE="number"   PRECISION="5"  SCALE="4"/>
   <TABLEATTRIBUTE NAME="Lookup table name" VALUE="tax_rates"/>
 </TRANSFORMATION>
 
-<!-- Expression port that calls it -->
+<!-- Expression port that calls it via :LKP.name(key) — PowerCenter expression syntax -->
 <TRANSFORMATION NAME="EXP_TAX" TYPE="Expression">
   <TRANSFORMFIELD NAME="state_code"  PORTTYPE="INPUT"  EXPRESSION="state_code"/>
   <TRANSFORMFIELD NAME="applied_tax" PORTTYPE="OUTPUT" EXPRESSION="amount * :LKP.LKP_TAX_RATE(state_code)"/>
+  <!--                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       :LKP.LKP_TAX_RATE(state_code) means: call unconnected lookup LKP_TAX_RATE with state_code as input key.
+       In PySpark this becomes col("tax_rate") after pre-joining the lookup table on state_code.           -->
 </TRANSFORMATION>
 ```
 
 **PySpark**
 ```python
-# LKP_TAX_RATE — unconnected lookup, pre-joined before EXP_TAX
-lkp_tax_rate = spark.table(f"{catalog}.{schema}.tax_rates") \
-    .dropDuplicates(["state_code"]) \
+# LKP_TAX_RATE + EXP_TAX  [Lookup Procedure + Expression]
+# Step 1: pre-join the unconnected lookup so tax_rate is available as a column
+lkp_tax_rate = (
+    spark.table(f"{catalog}.{schema}.tax_rates")
+    .dropDuplicates(["state_code"])
     .select("state_code", "tax_rate")
+)
 
-# EXP_TAX — :LKP.LKP_TAX_RATE(state_code) becomes col("tax_rate") after join
-df_tax = df_filtered \
-    .join(broadcast(lkp_tax_rate), "state_code", "left") \
+# Step 2: :LKP.LKP_TAX_RATE(state_code) → col("tax_rate") after the join
+df_tax = (
+    df_filtered
+    .join(broadcast(lkp_tax_rate), "state_code", "left")
     .withColumn("applied_tax", col("amount") * col("tax_rate"))
+)
 ```
 
 ---
@@ -240,14 +263,16 @@ df_tax = df_filtered \
 
 **PySpark**
 ```python
-# AGG_REVENUE
-from pyspark.sql.functions import sum, count, avg, lit, when
-
-df_agg = df_tax.groupBy("region", "product_cat").agg(
-    sum("amount").alias("total_revenue"),
-    count(lit(1)).alias("order_count"),
-    avg("amount").alias("avg_order"),
-    sum(when(col("amount") > 1000, col("amount")).otherwise(lit(0))).alias("large_revenue"),
+# AGG_REVENUE  [Aggregator]
+df_agg = (
+    df_tax
+    .groupBy("region", "product_cat")
+    .agg(
+        sum("amount").alias("total_revenue"),
+        count(lit(1)).alias("order_count"),
+        avg("amount").alias("avg_order"),
+        sum(when(col("amount") > 1000, col("amount")).otherwise(lit(0))).alias("large_revenue"),
+    )
 )
 ```
 
@@ -256,24 +281,30 @@ df_agg = df_tax.groupBy("region", "product_cat").agg(
 ## Router
 
 **PowerCenter XML**
+
+> **Router XML structure:** Each named group has a pair of `TABLEATTRIBUTE` elements — `GROUP NAME` followed by `GROUP FILTER CONDITION`. The default group has no condition; it catches all rows not matched by any named group.
+
 ```xml
 <TRANSFORMATION NAME="RTR_ORDER_SIZE" TYPE="Router">
   <TRANSFORMFIELD NAME="order_id" PORTTYPE="INPUT" DATATYPE="number" PRECISION="10" SCALE="0"/>
   <TRANSFORMFIELD NAME="amount"   PORTTYPE="INPUT" DATATYPE="number" PRECISION="18" SCALE="2"/>
-  <!-- Named groups — each has a GROUP FILTER CONDITION -->
-  <TABLEATTRIBUTE NAME="GROUP FILTER CONDITION" VALUE="amount >= 10000"/>  <!-- group: HIGH -->
-  <TABLEATTRIBUTE NAME="GROUP FILTER CONDITION" VALUE="amount >= 1000 AND amount &lt; 10000"/>  <!-- group: MED -->
-  <!-- Default group catches everything else — no condition needed -->
+  <!-- Group 1: HIGH -->
+  <TABLEATTRIBUTE NAME="GROUP NAME"             VALUE="HIGH"/>
+  <TABLEATTRIBUTE NAME="GROUP FILTER CONDITION" VALUE="amount >= 10000"/>
+  <!-- Group 2: MED -->
+  <TABLEATTRIBUTE NAME="GROUP NAME"             VALUE="MED"/>
+  <TABLEATTRIBUTE NAME="GROUP FILTER CONDITION" VALUE="amount >= 1000 AND amount &lt; 10000"/>
+  <!-- Default group (LOW) — no GROUP FILTER CONDITION; catches all unmatched rows -->
 </TRANSFORMATION>
 ```
 
 **PySpark**
 ```python
-# RTR_ORDER_SIZE
-# Default group is the logical complement of all named groups
+# RTR_ORDER_SIZE  [Router]
+# Default group (LOW) is the logical complement of all named groups
 df_high = df_agg.filter(col("amount") >= 10000)
 df_med  = df_agg.filter((col("amount") >= 1000) & (col("amount") < 10000))
-df_low  = df_agg.filter(col("amount") < 1000)   # default group
+df_low  = df_agg.filter(col("amount") < 1000)   # default group — no GROUP FILTER CONDITION in XML
 ```
 
 ---
@@ -294,35 +325,39 @@ df_low  = df_agg.filter(col("amount") < 1000)   # default group
 
 **PySpark**
 ```python
-# UPD_ORDERS — IIF(ISNULL(order_id), DD_INSERT, DD_UPDATE)
-# Translate the strategy expression to a dd_flag column, then MERGE
-df_staged = df_filtered.withColumn(
-    "dd_flag",
-    when(col("order_id").isNull(), lit(0)).otherwise(lit(1))  # 0=INSERT, 1=UPDATE
+# UPD_ORDERS  [Update Strategy] — IIF(ISNULL(order_id), DD_INSERT, DD_UPDATE)
+# Translate the Update Strategy Expression to a dd_flag column, then MERGE on the target
+df_staged = (
+    df_filtered
+    .withColumn(
+        "dd_flag",
+        when(col("order_id").isNull(), lit(0)).otherwise(lit(1)),  # 0=DD_INSERT, 1=DD_UPDATE
+    )
 )
 
-# TGT_FACT_ORDERS — Delta MERGE
-from delta.tables import DeltaTable
-
+# TGT_FACT_ORDERS  [Target Definition] — Delta MERGE
 target = DeltaTable.forName(spark, f"{catalog}.{schema}.fact_orders")
 
-target.alias("tgt").merge(
-    df_staged.alias("src"),
-    "tgt.order_id = src.order_id"
-).whenMatchedUpdate(
-    condition="src.dd_flag = 1",
-    set={
-        "status": "src.status",
-        "amount": "src.amount",
-    }
-).whenNotMatchedInsert(
-    condition="src.dd_flag = 0",
-    values={
-        "order_id": "src.order_id",
-        "status":   "src.status",
-        "amount":   "src.amount",
-    }
-).execute()
+(
+    target.alias("tgt")
+    .merge(df_staged.alias("src"), "tgt.order_id = src.order_id")
+    .whenMatchedUpdate(
+        condition="src.dd_flag = 1",
+        set={
+            "status": "src.status",
+            "amount": "src.amount",
+        },
+    )
+    .whenNotMatchedInsert(
+        condition="src.dd_flag = 0",
+        values={
+            "order_id": "src.order_id",
+            "status":   "src.status",
+            "amount":   "src.amount",
+        },
+    )
+    .execute()
+)
 ```
 
 ---
@@ -341,12 +376,13 @@ target.alias("tgt").merge(
 
 **PySpark**
 ```python
-# SRT_BY_DATE
-from pyspark.sql.functions import asc_nulls_last, desc_nulls_first
-
-df_sorted = df_joined.orderBy(
-    asc_nulls_last("order_id"),
-    desc_nulls_first("order_date"),
+# SRT_BY_DATE  [Sorter]
+df_sorted = (
+    df_joined
+    .orderBy(
+        asc_nulls_last("order_id"),
+        desc_nulls_first("order_date"),
+    )
 )
 ```
 
@@ -370,14 +406,13 @@ df_sorted = df_joined.orderBy(
 
 **PySpark**
 ```python
-# RNK_TOP3_ORDERS — TOP 3 per customer_id by amount descending
-from pyspark.sql.window import Window
-from pyspark.sql.functions import rank, desc
-
+# RNK_TOP3_ORDERS  [Rank] — TOP 3 per customer_id by amount descending
 _w = Window.partitionBy("customer_id").orderBy(desc("amount"))
-df_ranked = df_sorted \
-    .withColumn("RANKINDEX", rank().over(_w)) \
+df_ranked = (
+    df_sorted
+    .withColumn("RANKINDEX", rank().over(_w))
     .filter(col("RANKINDEX") <= 3)
+)
 ```
 
 ---
@@ -400,8 +435,12 @@ df_ranked = df_sorted \
 
 **PySpark**
 ```python
-# UNI_ALL_ORDERS — UNION ALL of three input streams
-df_union = df_stream_a.unionByName(df_stream_b).unionByName(df_stream_c)
+# UNI_ALL_ORDERS  [Union] — UNION ALL of three input streams
+df_union = (
+    df_stream_a
+    .unionByName(df_stream_b)
+    .unionByName(df_stream_c)
+)
 ```
 
 ---
@@ -422,12 +461,13 @@ df_union = df_stream_a.unionByName(df_stream_b).unionByName(df_stream_c)
 
 **PySpark**
 ```python
-# SEQ_SURROGATE
+# SEQ_SURROGATE  [Sequence Generator]
 # REVIEW: monotonically_increasing_id() is not sequential across runs.
 # If the target requires a stable, gapless sequence, use a Delta IDENTITY column instead.
-from pyspark.sql.functions import monotonically_increasing_id
-
-df_with_key = df_union.withColumn("surrogate_key", monotonically_increasing_id())
+df_with_key = (
+    df_union
+    .withColumn("surrogate_key", monotonically_increasing_id())
+)
 ```
 
 ---
@@ -451,11 +491,13 @@ df_with_key = df_union.withColumn("surrogate_key", monotonically_increasing_id()
 
 **PySpark**
 ```python
-# NRM_QUARTERLY_SALES — unpivot four quarter columns into rows
-from pyspark.sql.functions import expr
-
-df_normalized = df_raw.select(
-    "product_id",
-    expr("stack(4, 1, Q1_SALES, 2, Q2_SALES, 3, Q3_SALES, 4, Q4_SALES) AS (GK_QUARTER, SALES)")
+# NRM_QUARTERLY_SALES  [Normalizer] — unpivot four quarter columns into rows
+# GCID values (1–4) map to GK_QUARTER; each row in the output has one (GK_QUARTER, SALES) pair
+df_normalized = (
+    df_raw
+    .select(
+        "product_id",
+        expr("stack(4, 1, Q1_SALES, 2, Q2_SALES, 3, Q3_SALES, 4, Q4_SALES) AS (GK_QUARTER, SALES)"),
+    )
 )
 ```

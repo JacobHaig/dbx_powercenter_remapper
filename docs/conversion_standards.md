@@ -44,7 +44,7 @@ The notebook content uses Databricks source format:
 # MAGIC **Converted:** 2024-01-15  
 # MAGIC
 # MAGIC ## Description
-# MAGIC <Original mapping description from XML>
+# MAGIC <Value of the DESCRIPTION attribute on the <MAPPING> XML element>
 # MAGIC
 # MAGIC ## Review Items
 # MAGIC - [ ] REVIEW: Sequence generator produces non-sequential IDs — verify acceptability
@@ -96,24 +96,28 @@ Only import what is actually used. Do not import speculatively.
 
 ### Cell 4–N — Source Reads
 
-One cell per source. Cell comment equals the PowerCenter Source Qualifier name.
+One cell per source. The first line of every cell must be the **cell header comment** (see Code Formatting below).
 
 ```python
-# SQ_ORDERS
-sq_orders = spark.table(f"{catalog}.{schema}.orders") \
+# SQ_ORDERS  [Source Qualifier]
+sq_orders = (
+    spark.table(f"{catalog}.{schema}.orders")
     .filter(col("status").isin(["ACTIVE", "PENDING"]))
+)
 ```
 
 ### Cell N+1 through M — Transformations
 
-One logical group per cell. Group by PowerCenter transformation name or logical step. Each cell comment names the transformation(s) it represents.
+One logical group per cell. Group by PowerCenter transformation name or logical step. The first line of every cell must be the **cell header comment** (see Code Formatting below).
 
 ```python
-# EXP_CALCULATE_AMOUNTS
-df_amounts = sq_orders \
-    .withColumn("tax_amount", round(col("subtotal") * lit(0.08), 2)) \
-    .withColumn("total_amount", col("subtotal") + col("tax_amount")) \
+# EXP_CALCULATE_AMOUNTS  [Expression]
+df_amounts = (
+    sq_orders
+    .withColumn("tax_amount",     round(col("subtotal") * lit(0.08), 2))
+    .withColumn("total_amount",   col("subtotal") + col("tax_amount"))
     .withColumn("is_large_order", when(col("total_amount") > 1000, lit(1)).otherwise(lit(0)))
+)
 ```
 
 ### Final Cells — Target Writes
@@ -121,20 +125,154 @@ df_amounts = sq_orders \
 One cell per target. Prefer Delta MERGE for any target with an Update Strategy; use `.write` for insert-only or truncate-reload targets.
 
 ```python
-# TGT_FACT_ORDERS — INSERT/UPDATE via MERGE
+# TGT_FACT_ORDERS  [Target Definition] — INSERT/UPDATE via MERGE
 target = DeltaTable.forName(spark, f"{catalog}.{schema}.fact_orders")
 
-target.alias("tgt").merge(
-    df_final.alias("src"),
-    "tgt.order_id = src.order_id"
-).whenMatchedUpdate(
-    condition="src.dd_flag = 1",
-    set={c: f"src.{c}" for c in update_columns}
-).whenNotMatchedInsert(
-    condition="src.dd_flag = 0",
-    values={c: f"src.{c}" for c in insert_columns}
-).execute()
+(
+    target.alias("tgt")
+    .merge(df_final.alias("src"), "tgt.order_id = src.order_id")
+    .whenMatchedUpdate(
+        condition="src.dd_flag = 1",
+        set={c: f"src.{c}" for c in update_columns},
+    )
+    .whenNotMatchedInsert(
+        condition="src.dd_flag = 0",
+        values={c: f"src.{c}" for c in insert_columns},
+    )
+    .execute()
+)
 ```
+
+---
+
+## Code Formatting
+
+Every cell the agent produces must meet these formatting rules. Unreadable output is not a valid deliverable.
+
+### Cell Header Comment (Required)
+
+The **first line of every code cell** must identify the PowerCenter transformation it represents:
+
+```
+# <TRANSFORMATION_NAME>  [<TYPE>]
+```
+
+Examples:
+```python
+# SQ_ORDERS  [Source Qualifier]
+# EXP_CALCULATE_AMOUNTS  [Expression]
+# FIL_ACTIVE_ORDERS  [Filter]
+# JNR_ORDER_CUSTOMER  [Joiner]
+# LKP_PRODUCT  [Lookup Procedure]
+# AGG_REVENUE  [Aggregator]
+# RTR_ORDER_SIZE  [Router]
+# UPD_ORDERS  [Update Strategy]
+# TGT_FACT_ORDERS  [Target Definition]
+```
+
+For cells that combine multiple steps (e.g., a lookup pre-join immediately before its expression), list both:
+```python
+# LKP_TAX_RATE + EXP_TAX  [Lookup Procedure + Expression]
+```
+
+### Method Chain Formatting
+
+Use parentheses (not backslash) for line continuation. Each `.method()` call goes on its own line, indented 4 spaces from the variable name. One column expression per `.withColumn()` line.
+
+```python
+# Good — readable, one operation per line
+df_amounts = (
+    sq_orders
+    .withColumn("tax_amount",     round(col("subtotal") * lit(0.08), 2))
+    .withColumn("total_amount",   col("subtotal") + col("tax_amount"))
+    .withColumn("is_large_order", when(col("total_amount") > 1000, lit(1)).otherwise(lit(0)))
+)
+
+# Bad — do not write chains on a single line or with backslash continuation
+df_amounts = sq_orders.withColumn("tax_amount", round(col("subtotal") * lit(0.08), 2)).withColumn("total_amount", col("subtotal") + col("tax_amount"))
+```
+
+### Aggregation Formatting
+
+Each aggregation expression goes on its own line inside `.agg(...)`:
+
+```python
+df_agg = (
+    df.groupBy("region", "product_cat")
+    .agg(
+        sum("amount").alias("total_revenue"),
+        count(lit(1)).alias("order_count"),
+        avg("amount").alias("avg_order"),
+        sum(when(col("amount") > 1000, col("amount")).otherwise(lit(0))).alias("large_revenue"),
+    )
+)
+```
+
+### Join Formatting
+
+Each argument to `.join()` on its own line when there are three or more arguments:
+
+```python
+df_joined = (
+    df_orders.join(
+        broadcast(lkp_product),
+        df_orders["product_id"] == lkp_product["product_id"],
+        "left",
+    )
+    .select(
+        df_orders["order_id"],
+        df_orders["amount"],
+        lkp_product["product_name"],
+        lkp_product["category"],
+    )
+)
+```
+
+### Delta MERGE Formatting
+
+Each MERGE clause on its own `.when...()` line, with `set` / `values` dictionaries broken out one key per line:
+
+```python
+(
+    target.alias("tgt")
+    .merge(df_staged.alias("src"), "tgt.order_id = src.order_id")
+    .whenMatchedUpdate(
+        condition="src.dd_flag = 1",
+        set={
+            "status":     "src.status",
+            "amount":     "src.amount",
+            "updated_at": "src.updated_at",
+        },
+    )
+    .whenNotMatchedInsert(
+        condition="src.dd_flag = 0",
+        values={
+            "order_id": "src.order_id",
+            "status":   "src.status",
+            "amount":   "src.amount",
+        },
+    )
+    .execute()
+)
+```
+
+### Window Function Formatting
+
+Assign the Window spec to a named variable before using it:
+
+```python
+_w = Window.partitionBy("customer_id").orderBy(desc("amount"))
+df_ranked = (
+    df
+    .withColumn("RANKINDEX", rank().over(_w))
+    .filter(col("RANKINDEX") <= 3)
+    .drop("RANKINDEX")
+)
+```
+
+### Column Alignment
+
+When a cell has multiple `.withColumn()` calls for related fields, align the column name strings and expressions at the same column position for readability. This is a preference, not a hard rule — apply it when there are 3 or more adjacent calls.
 
 ---
 

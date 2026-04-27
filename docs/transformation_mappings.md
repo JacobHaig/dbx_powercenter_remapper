@@ -14,21 +14,21 @@ This is the authoritative translation reference. For every PowerCenter transform
 # No Sql Query override — read full table
 sq_orders = spark.table(f"{catalog}.{schema}.orders")
 
-# With Sql Query override
-sq_orders = spark.sql("""
+# With Sql Query override — use f-string so catalog/schema come from widgets
+sq_orders = spark.sql(f"""
     SELECT order_id, customer_id, amount
-    FROM catalog.schema.orders
+    FROM {catalog}.{schema}.orders
     WHERE status = 'ACTIVE'
 """)
 
 # With Source Filter only (no full override)
 sq_orders = spark.table(f"{catalog}.{schema}.orders").filter("status = 'ACTIVE'")
 
-# With User Defined Join (two sources joined in SQ)
-sq_combined = spark.sql("""
+# With User Defined Join (two sources joined in SQ) — use f-string for catalog/schema
+sq_combined = spark.sql(f"""
     SELECT o.order_id, c.customer_name
-    FROM catalog.schema.orders o
-    JOIN catalog.schema.customers c ON o.customer_id = c.customer_id
+    FROM {catalog}.{schema}.orders o
+    JOIN {catalog}.{schema}.customers c ON o.customer_id = c.customer_id
 """)
 ```
 
@@ -126,7 +126,7 @@ df_with_product = df_orders.join(
 
 ### Lookup (Unconnected) → Python UDF or `.join()`
 
-Unconnected lookups are called from Expression ports using `:LKP.lookup_name(key)`. Translate to a broadcast join applied before the Expression transformation.
+Unconnected lookups appear as `:LKP.lookup_name(key)` inside an Expression port's `EXPRESSION` attribute — this is **PowerCenter expression syntax**, not Python. The colon-prefix `:LKP.` means the lookup is called inline inside the expression. Translate to a broadcast join applied before the Expression transformation so the returned column is available as a regular DataFrame column.
 
 ```python
 # Instead of :LKP.lkp_tax_rate(state_code) in an expression port,
@@ -171,7 +171,15 @@ df_med  = df.filter((col("amount") >= 1000) & (col("amount") < 10000))
 df_low  = df.filter(col("amount") < 1000)   # default group catches everything else
 ```
 
-**Important:** The default group is exclusive — it receives rows not matched by any named group. Build it as `NOT (group1_condition OR group2_condition ...)`.
+**Important:** The default group is exclusive — it receives rows not matched by any named group. Build it as the logical complement of all named group conditions:
+
+```python
+# Named groups: HIGH (amount >= 10000), MED (amount >= 1000 AND amount < 10000)
+# Default group = NOT (HIGH OR MED)
+df_low = df.filter(~((col("amount") >= 10000) | ((col("amount") >= 1000) & (col("amount") < 10000))))
+# Equivalent simplified form:
+df_low = df.filter(col("amount") < 1000)
+```
 
 ---
 
@@ -353,8 +361,8 @@ Flag as `# REVIEW: MAPPLET INLINED — verify port mappings` whenever inlining a
 | `UPPER(s)` | `upper(col("s"))` |
 | `LOWER(s)` | `lower(col("s"))` |
 | `LENGTH(s)` | `length(col("s"))` |
-| `SUBSTR(s, start, len)` | `substring(col("s"), start, len)` — note: 1-based index |
-| `INSTR(s, search)` | `locate(search, col("s"))` — returns 0 if not found |
+| `SUBSTR(s, start, len)` | `substring(col("s"), start, len)` — **1-based index** (PowerCenter and Spark both use 1-based) |
+| `INSTR(s, search)` | `locate(search, col("s"))` — returns 0 if not found (PowerCenter also returns 0) |
 | `CONCAT(s1, s2)` | `concat(col("s1"), col("s2"))` |
 | `RPAD(s, len, pad)` | `rpad(col("s"), len, pad)` |
 | `LPAD(s, len, pad)` | `lpad(col("s"), len, pad)` |

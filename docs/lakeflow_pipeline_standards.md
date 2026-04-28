@@ -386,7 +386,7 @@ Delta tables do not guarantee physical row order. A Sorter that exists solely to
 
 **Registration (mandatory):**
 - [ ] `w.pipelines.create(...)` cell is delivered alongside the notebook asset — the notebook alone is NOT a usable pipeline
-- [ ] `catalog` and `schema` in `w.pipelines.create(...)` match the values in the `configuration` dict
+- [ ] `catalog` and `schema` in `w.pipelines.create(...)` match the `pipeline.param.catalog` and `pipeline.param.schema` values in the `configuration` dict
 - [ ] Every `spark.conf.get("pipeline.param.*")` key in Cell 3 has a corresponding entry in the `configuration` dict
 - [ ] `continuous=False` unless the source is a streaming source
 - [ ] `channel="CURRENT"` is set

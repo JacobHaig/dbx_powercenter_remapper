@@ -203,8 +203,8 @@ pipeline = w.pipelines.create(
 
 ### Key Rules
 
-- **`catalog` + `schema`** is the Unity Catalog approach. Do **not** use the legacy `target` field — it writes to Hive Metastore.
-- `catalog` and `schema` in `w.pipelines.create(...)` must match the values in the `configuration` dict so the pipeline runtime and the notebook parameters agree.
+- **`catalog` + `schema`** is the Unity Catalog approach. Do **not** use the legacy `target` field — it is deprecated and configures legacy Hive Metastore publishing mode instead of Unity Catalog.
+- `catalog` and `schema` in `w.pipelines.create(...)` must match the `pipeline.param.catalog` and `pipeline.param.schema` values in the `configuration` dict so the pipeline runtime and the notebook parameters agree.
 - `continuous=False` matches PowerCenter batch ETL; only use `True` for streaming sources.
 - Every `spark.conf.get("pipeline.param.*")` call in the notebook's Cell 3 must have a corresponding key in the `configuration` dict.
 - The pipeline registration call is a **mandatory second deliverable** — list it as "Cell: Pipeline Registration" in the conversion summary.

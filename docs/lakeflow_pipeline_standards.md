@@ -6,6 +6,23 @@ When the user selects **pipeline** as the output format, the agent produces a La
 
 ---
 
+## ⚠ Two Required Deliverables — Both Are Mandatory
+
+A notebook that imports `from pyspark import pipelines as dp` and uses `@dp.table` decorators is **not** a Lakeflow pipeline. It is just Python code. The `@dp.table` decorated functions are parsed and executed only by the Lakeflow pipeline runtime — a regular notebook run will not invoke them correctly.
+
+Selecting the **pipeline** output format requires the agent to produce **both**:
+
+| # | Deliverable | SDK Call | Purpose |
+|---|---|---|---|
+| 1 | **Pipeline notebook asset** | `w.workspace.import_()` | Source code with `@dp.table` functions |
+| 2 | **Pipeline registration** | `w.pipelines.create(...)` | Registers the notebook as an executable pipeline in the workspace |
+
+**Do not deliver only the notebook.** A notebook without pipeline registration is not a usable pipeline output. See `docs/databricks_notebook_creation.md` — Lakeflow Spark Declarative Pipeline Notebooks for the exact SDK patterns for both deliverables.
+
+---
+
+---
+
 ## What Changes vs. a Regular Notebook
 
 | Aspect | Regular Notebook | Lakeflow Pipeline Notebook |
@@ -367,6 +384,14 @@ Delta tables do not guarantee physical row order. A Sorter that exists solely to
 
 ## Pre-Delivery Checklist (Pipeline)
 
+**Registration (mandatory):**
+- [ ] `w.pipelines.create(...)` cell is delivered alongside the notebook asset — the notebook alone is NOT a usable pipeline
+- [ ] `catalog` and `schema` in `w.pipelines.create(...)` match the values in the `configuration` dict
+- [ ] Every `spark.conf.get("pipeline.param.*")` key in Cell 3 has a corresponding entry in the `configuration` dict
+- [ ] `continuous=False` unless the source is a streaming source
+- [ ] `channel="CURRENT"` is set
+
+**Notebook content:**
 - [ ] All source datasets use `@dp.table` with `spark.table(...)` or `spark.sql(...)` — no hardcoded catalog/schema strings (use module-level pipeline parameter variables)
 - [ ] All intermediate transformations read upstream datasets with `dp.read("name")` — no direct cross-function DataFrame references
 - [ ] All target tables use `@dp.table`, `@dp.materialized_view`, or `dp.create_auto_cdc_flow` — no `.write.format("delta")` calls

@@ -141,20 +141,26 @@ print(f"Notebook created: {target_path}")
 
 ## Lakeflow Spark Declarative Pipeline Notebooks
 
-When the output format is `pipeline`, the notebook itself is still created as a workspace notebook asset using the same SDK pattern above — the content just uses `@dp.table` decorators instead of imperative PySpark. The `language=Language.PYTHON` and `format=ImportFormat.SOURCE` parameters are unchanged.
+When the output format is `pipeline`, the agent must deliver **two** SDK calls:
 
-After creating the notebook asset, the user must also create a **pipeline** that runs it. Provide this creation snippet as a separate deliverable cell:
+1. **Notebook asset creation** — same `w.workspace.import_()` pattern above; content uses `@dp.table` decorators. `language=Language.PYTHON` and `format=ImportFormat.SOURCE` are unchanged.
+2. **Pipeline registration** — `w.pipelines.create(...)` registers the notebook as an executable Lakeflow pipeline. **Without this call, the notebook is just code with an import — it is not a pipeline and cannot be run as one.**
+
+> A notebook containing `from pyspark import pipelines as dp` is NOT a Lakeflow pipeline until it is registered via `w.pipelines.create(...)`. The `@dp.table` decorated functions are parsed and executed only by the Lakeflow pipeline runtime, not by a regular notebook run.
+
+### Pipeline Registration Pattern (Unity Catalog — required)
 
 ```python
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.pipelines import (
-    PipelineLibrary, NotebookLibrary, PipelineCluster
-)
+from databricks.sdk.service.pipelines import PipelineLibrary, NotebookLibrary
 
 w = WorkspaceClient()
 
 pipeline = w.pipelines.create(
     name="pipeline_<mapping_name_lowercase>",
+    # Unity Catalog target — tables land at catalog.schema.<table_name>
+    catalog="<catalog>",   # same value as pipeline.param.catalog in the notebook
+    schema="<schema>",     # same value as pipeline.param.schema in the notebook
     libraries=[
         PipelineLibrary(
             notebook=NotebookLibrary(
@@ -162,23 +168,46 @@ pipeline = w.pipelines.create(
             )
         )
     ],
-    continuous=False,      # triggered (batch) mode — set True for streaming
-    channel="CURRENT",     # use latest Databricks runtime
+    continuous=False,       # False = triggered/batch mode; matches PowerCenter ETL semantics
+    channel="CURRENT",      # latest Databricks Lakeflow runtime
     configuration={
-        # Declare all pipeline.param.* values referenced in the notebook
+        # Every spark.conf.get("pipeline.param.*") in the notebook needs an entry here
         "pipeline.param.catalog": "<catalog>",
         "pipeline.param.schema":  "<schema>",
-        # Add additional parameters here
-    }
+        # Add any additional pipeline.param.* keys from Cell 3 of the notebook
+    },
 )
 
-print(f"Pipeline created: {pipeline.pipeline_id}")
+print(f"Pipeline registered: {pipeline.pipeline_id}")
+print(f"Run it in the Databricks UI under Pipelines, or call:")
+print(f"  w.pipelines.start_update(pipeline_id='{pipeline.pipeline_id}')")
 ```
 
-Key points:
-- `continuous=False` matches the PowerCenter batch ETL model; change to `True` only for streaming sources.
-- Every `spark.conf.get("pipeline.param.*")` call in the notebook must have a corresponding entry in `configuration`.
-- The pipeline SDK call is a **separate deliverable** from the notebook asset — deliver both.
+### Serverless Option
+
+If the workspace has serverless pipelines enabled, omit `clusters` (serverless is the default). If you need to specify a cluster, add:
+
+```python
+from databricks.sdk.service.pipelines import PipelineCluster
+
+pipeline = w.pipelines.create(
+    ...,
+    clusters=[
+        PipelineCluster(
+            label="default",
+            num_workers=2,          # REVIEW: size to expected data volume
+        )
+    ],
+)
+```
+
+### Key Rules
+
+- **`catalog` + `schema`** is the Unity Catalog approach. Do **not** use the legacy `target` field — it writes to Hive Metastore.
+- `catalog` and `schema` in `w.pipelines.create(...)` must match the values in the `configuration` dict so the pipeline runtime and the notebook parameters agree.
+- `continuous=False` matches PowerCenter batch ETL; only use `True` for streaming sources.
+- Every `spark.conf.get("pipeline.param.*")` call in the notebook's Cell 3 must have a corresponding key in the `configuration` dict.
+- The pipeline registration call is a **mandatory second deliverable** — list it as "Cell: Pipeline Registration" in the conversion summary.
 
 ---
 

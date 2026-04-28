@@ -34,7 +34,7 @@ Extract everything from the XML: all `<SOURCE>`, `<TARGET>`, and `<TRANSFORMATIO
 Check the `### Output Format` field in the conversion request **before writing any code.**
 
 - If `notebook` (or no selection): follow `docs/conversion_standards.md`. See below.
-- If `pipeline`: read `docs/lakeflow_pipeline_standards.md` in full, then follow it instead.
+- If `pipeline`: read `docs/lakeflow_pipeline_standards.md` in full, then follow it instead. **Pipeline format requires two deliverables:** (1) the notebook asset and (2) a `w.pipelines.create(...)` registration cell. Do not deliver only the notebook — a notebook with `@dp.table` imports is not an executable pipeline without registration.
 - If neither is selected: stop and ask the user to mark a selection before proceeding.
 
 Required first line of content: `# Databricks notebook source`
@@ -85,4 +85,5 @@ Return in this order:
 2. **Phase 2 — Extraction Complete manifest** (before notebook is written)
 3. **Phase 4 — Review Summary** (after cell review)
 4. **The notebook** — created as a Databricks workspace notebook asset at `notebooks/nb_<mapping_name_lowercase>` (no `.py` extension); first line of content `# Databricks notebook source`; cells separated by `# COMMAND ----------`; use the SDK pattern in `docs/databricks_notebook_creation.md`
-5. **Conversion Summary** — mapping name, source/target counts, transformation count, REVIEW items, complexity score
+5. **Pipeline registration cell** *(pipeline format only)* — a separate runnable cell containing `w.pipelines.create(...)` that registers the notebook as an actual Lakeflow pipeline. **This is mandatory when format=pipeline.** A notebook with `@dp.table` functions is not a working pipeline until this call is made. Use the pattern in `docs/databricks_notebook_creation.md` — Pipeline Registration Pattern. Set `catalog`, `schema`, and all `configuration` keys to match the values from the notebook's Cell 3.
+6. **Conversion Summary** — mapping name, source/target counts, transformation count, REVIEW items, complexity score; if format=pipeline, confirm both notebook and pipeline registration were delivered
